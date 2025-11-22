@@ -21,21 +21,88 @@ mcp = FastMCP("Debug Context MCP Server")
 @mcp.tool()
 def submit_code_context_mcp(text: str) -> str:
     """
-    Submit code changes with context. Send a text message containing:
-    1. Code chunks showing what changed (before/after)
-    2. Explanation of what the code does
-    3. How this code relates to other code chunks
+    Submit code changes with context. REQUIRES MULTIPLE CODE CHUNKS in sequence, each with ACTUAL CODE BLOCKS (5-10 lines), not English descriptions.
     
-    Example format:
-    [Code Chunk]
-    Changed: for i in range(10)
-    To: for var in list
+    Format: Repeat this pattern for EACH code chunk that changed:
+    1. [Code Chunk] - Include ACTUAL CODE (5-10 lines) showing what changed, with clear BEFORE and AFTER blocks
+    2. [Explanation] - Brief explanation of what this specific code chunk does
+    3. [Relationships] - How this code chunk relates to OTHER code chunks (reference other chunks by name/file)
+    
+    Then continue with the next code chunk using the same pattern.
+    
+    CRITICAL REQUIREMENTS:
+    - Include MULTIPLE code chunks (not just one)
+    - Each chunk must have REAL, executable code blocks (5-10 lines)
+    - Do NOT use English descriptions like "for loop that iterates" - show actual code
+    - Each chunk should reference relationships to other chunks
+    
+    Example format (showing MULTIPLE chunks):
+    
+    [Code Chunk 1]
+    File: src/utils.py
+    
+    BEFORE:
+    def process_data(items):
+        result = []
+        for i in range(len(items)):
+            item = items[i]
+            result.append(item * 2)
+        return result
+    
+    AFTER:
+    def process_data(items):
+        result = []
+        for item in items:
+            result.append(item * 2)
+        return result
     
     [Explanation]
-    This code iterates over a list and processes each item...
+    Refactored the function to use direct iteration over items instead of index-based access, making the code more Pythonic and readable.
     
     [Relationships]
-    This code relates to process_data() function by calling it for each item...
+    This function is called by calculate_totals() function (see Code Chunk 2) and is used by the API endpoint in src/api/routes.py (see Code Chunk 3).
+    
+    [Code Chunk 2]
+    File: src/calculations.py
+    
+    BEFORE:
+    def calculate_totals(data):
+        processed = process_data(data)
+        return sum(processed)
+    
+    AFTER:
+    def calculate_totals(data):
+        processed = process_data(data)
+        return sum(processed)
+    
+    [Explanation]
+    This function calls process_data() from Code Chunk 1 to process the input data before calculating totals.
+    
+    [Relationships]
+    Depends on process_data() function from Code Chunk 1. Called by the API handler in Code Chunk 3.
+    
+    [Code Chunk 3]
+    File: src/api/routes.py
+    
+    BEFORE:
+    @app.route('/api/totals')
+    def get_totals():
+        data = request.json
+        totals = calculate_totals(data)
+        return jsonify({'totals': totals})
+    
+    AFTER:
+    @app.route('/api/totals')
+    def get_totals():
+        data = request.json
+        totals = calculate_totals(data)
+        return jsonify({'totals': totals})
+    
+    [Explanation]
+    API endpoint that uses calculate_totals() from Code Chunk 2 to process requests.
+    
+    [Relationships]
+    Calls calculate_totals() from Code Chunk 2, which in turn uses process_data() from Code Chunk 1.
     """
     return submit_code_context(text)
 

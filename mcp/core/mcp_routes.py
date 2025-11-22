@@ -23,13 +23,13 @@ def get_tools_list_schema() -> dict:
             "tools": [
                 {
                     "name": "submit_code_context_mcp",
-                    "description": "Submit code changes with context. Send a text message containing: 1. Code chunks showing what changed (before/after), 2. Explanation of what the code does, 3. How this code relates to other code chunks. Example format: [Code Chunk] Changed: for i in range(10) To: for var in list [Explanation] This code iterates... [Relationships] This code relates to process_data()...",
+                    "description": "Submit MULTIPLE code chunks with context. REQUIRES SEQUENCE: [Code Chunk 1] with BEFORE/AFTER actual code blocks (5-10 lines), [Explanation], [Relationships] → [Code Chunk 2] with BEFORE/AFTER code, [Explanation], [Relationships] → repeat for each changed chunk. CRITICAL: Include MULTIPLE chunks, each with real executable code (not English descriptions). Each chunk's Relationships should reference other chunks. Example: [Code Chunk 1] File: src/utils.py BEFORE: def process_data(items): ... AFTER: def process_data(items): ... [Explanation] Refactored... [Relationships] Called by Code Chunk 2... [Code Chunk 2] File: src/calc.py BEFORE: ... AFTER: ... [Explanation] ... [Relationships] Uses Code Chunk 1...",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "text": {
                                 "type": "string",
-                                "description": "Raw text containing code chunks, explanations, and relationships"
+                                "description": "Raw text containing MULTIPLE code chunks in sequence. Each chunk must have: [Code Chunk] with BEFORE/AFTER actual code blocks (5-10 lines), [Explanation], [Relationships]. Repeat this pattern for each changed code section. Must include real executable code blocks, not English descriptions."
                             }
                         },
                         "required": ["text"]
