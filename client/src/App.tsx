@@ -6,8 +6,8 @@ import {
   ResizablePanelGroup,
   ResizablePanel,
   ResizableHandle,
-  type ImperativePanelHandle,
 } from '@/components/ui/resizable';
+import type { ImperativePanelHandle } from 'react-resizable-panels';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 function App() {
@@ -19,8 +19,8 @@ function App() {
   const leftPanelRef = useRef<ImperativePanelHandle>(null);
   
   // Selection State
-  const [activeStepId, setActiveStepId] = useState<string | null>('step-3'); // Start with a failure selected
-  const [activeNodeId, setActiveNodeId] = useState<string | null>('block-C');
+  const [activeStepId, setActiveStepId] = useState<string | null>('score-step-21'); // Start with a failure selected
+  const [activeNodeId, setActiveNodeId] = useState<string | null>('score-block-aggregate');
 
   // Sync Node selection when Step is selected
   const handleStepSelect = (stepId: string) => {
@@ -107,6 +107,7 @@ function App() {
               initialEdges={initialEdges}
               activeNodeId={activeNodeId}
               onNodeClick={handleNodeClick}
+              problems={problems}
             />
           </div>
         </ResizablePanel>
