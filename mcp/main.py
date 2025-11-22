@@ -3,15 +3,27 @@ MCP Debug Context Server
 Accepts code changes from Cursor, stores project context and code chunk debugging information.
 Can be run as an MCP server (stdio) or as a FastAPI HTTP server with SSE support.
 """
+import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastmcp import FastMCP
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Import from core package
 from core import (
     sse_endpoint_handler,
     sse_message_handler,
     submit_code_context
+)
+
+# Import from api package
+from api import (
+    get_control_flow_diagram,
+    execute_test_cases,
+    send_debugger_response
 )
 
 # Initialize the MCP server (for stdio mode)
@@ -122,6 +134,9 @@ async def root():
         "version": "0.2.0",
         "endpoints": {
             "health": "/health",
+            "get_control_flow_diagram": "/get_control_flow_diagram",
+            "execute_test_cases": "/execute_test_cases",
+            "send_debugger_response": "/send_debugger_response",
             "sse": "/sse",
             "sse_message": "/sse/message"
         }
@@ -133,6 +148,45 @@ async def health():
     """Health check endpoint."""
     return {"status": "ok", "service": "Debug Context MCP Server"}
 
+
+@app.get("/get_control_flow_diagram")
+async def get_control_flow_diagram_endpoint():
+    """Get control flow diagram data."""
+    try:
+        result = get_control_flow_diagram()
+        logger.info(f"GET /get_control_flow_diagram - Response: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"GET /get_control_flow_diagram - Error: {str(e)}")
+        return {"error": str(e)}
+
+
+@app.post("/execute_test_cases")
+async def execute_test_cases_endpoint(request: Request):
+    """Execute test cases."""
+    try:
+        data = await request.json()
+        logger.info(f"POST /execute_test_cases - Received: {data}")
+        result = execute_test_cases(data)
+        logger.info(f"POST /execute_test_cases - Response: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"POST /execute_test_cases - Error: {str(e)}")
+        return {"error": str(e)}
+
+
+@app.post("/send_debugger_response")
+async def send_debugger_response_endpoint(request: Request):
+    """Send debugger response."""
+    try:
+        data = await request.json()
+        logger.info(f"POST /send_debugger_response - Received: {data}")
+        result = send_debugger_response(data)
+        logger.info(f"POST /send_debugger_response - Response: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"POST /send_debugger_response - Error: {str(e)}")
+        return {"error": str(e)}
 
 
 # ============================================================================
