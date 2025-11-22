@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python3"]
+nixPkgs = ["python312"]
 aptPkgs = ["curl", "wget"]
 
 [phases.install]

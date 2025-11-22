@@ -4,7 +4,7 @@ MCP tool functions for the debug context server.
 import json
 from typing import Optional
 from datetime import datetime
-from storage import (
+from .storage import (
     read_json_file,
     write_json_file,
     append_to_json_file,
@@ -12,8 +12,8 @@ from storage import (
     CHANGES_HISTORY_FILE,
     PROJECT_CONTEXT_FILE
 )
-from models import ChangeSubmission, CodeChunk
-from extractors import validate_change_submission, extract_relational_context
+from .models import ChangeSubmission, CodeChunk
+from .extractors import validate_change_submission, extract_relational_context
 
 
 def submit_code_changes(

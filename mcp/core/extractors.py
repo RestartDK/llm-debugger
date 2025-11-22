@@ -3,7 +3,7 @@ Relational context extraction and validation functions.
 """
 import re
 from typing import List, Dict, Any
-from models import ChangeSubmission
+from .models import ChangeSubmission
 
 
 def extract_imports(code_content: str) -> List[str]:

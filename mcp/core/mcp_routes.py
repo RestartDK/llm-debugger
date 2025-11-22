@@ -5,7 +5,7 @@ import json
 from fastapi import Request
 from fastapi.responses import StreamingResponse
 import asyncio
-from mcp_tools import (
+from .mcp_tools import (
     submit_code_changes,
     get_project_context,
     get_code_chunk_context,

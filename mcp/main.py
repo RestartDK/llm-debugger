@@ -8,19 +8,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastmcp import FastMCP
 from typing import Optional
 
-# Import route handlers
-from api_routes import (
+# Import from core package
+from core import (
     submit_changes_handler,
     get_project_context_handler,
     get_chunk_context_handler,
-    get_documentation
-)
-from mcp_routes import (
+    get_documentation,
     sse_endpoint_handler,
-    sse_message_handler
-)
-from models import ChangeSubmission, ChunkContextRequest
-from mcp_tools import (
+    sse_message_handler,
+    ChangeSubmission,
+    ChunkContextRequest,
     submit_code_changes,
     get_project_context,
     get_code_chunk_context,

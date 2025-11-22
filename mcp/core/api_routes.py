@@ -3,9 +3,9 @@ REST API route handlers for the debug context server.
 """
 from fastapi import HTTPException
 from datetime import datetime
-from storage import read_json_file, write_json_file, CODE_CHUNKS_FILE
-from models import ChangeSubmission, ChunkContextRequest, CodeChunk
-from extractors import validate_change_submission, extract_relational_context
+from .storage import read_json_file, write_json_file, CODE_CHUNKS_FILE, CHANGES_HISTORY_FILE, append_to_json_file, PROJECT_CONTEXT_FILE
+from .models import ChangeSubmission, ChunkContextRequest, CodeChunk
+from .extractors import validate_change_submission, extract_relational_context
 
 
 def get_documentation() -> dict:
@@ -66,8 +66,6 @@ def submit_changes_handler(submission: ChangeSubmission) -> dict:
     try:
         validated = validate_change_submission(submission)
         
-        from storage import CHANGES_HISTORY_FILE, append_to_json_file
-        
         change = {
             **validated,
             "timestamp": datetime.now().isoformat()
@@ -96,7 +94,6 @@ def submit_changes_handler(submission: ChangeSubmission) -> dict:
 
 def get_project_context_handler() -> dict:
     """Get project context."""
-    from storage import PROJECT_CONTEXT_FILE
     context = read_json_file(PROJECT_CONTEXT_FILE, default={})
     return context
 
