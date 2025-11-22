@@ -41,7 +41,7 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="overflow-auto h-full">
             <table className="min-w-full w-full text-xs text-left table-fixed border-collapse">
-              <thead className="bg-muted/20 sticky top-0 z-10 shadow-sm">
+              <thead className="bg-background sticky top-0 z-10 shadow-xs">
                 <tr>
                   <th className="px-2 py-1.5 font-medium text-muted-foreground w-[50px] min-w-[50px] whitespace-nowrap overflow-hidden text-ellipsis">Step</th>
                   <th className="px-2 py-1.5 font-medium text-muted-foreground w-[100px] min-w-[100px] whitespace-nowrap overflow-hidden text-ellipsis">Status</th>
