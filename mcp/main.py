@@ -82,8 +82,15 @@ async def health():
 
 @app.get("/sse")
 async def sse_endpoint(request: Request):
-    """SSE endpoint for MCP protocol over HTTP."""
+    """SSE endpoint for MCP protocol over HTTP (GET for SSE stream)."""
     return await sse_endpoint_handler(request)
+
+
+@app.post("/sse")
+async def sse_post_endpoint(request: Request):
+    """Handle POST requests to /sse endpoint (Cursor may POST here for messages)."""
+    # Forward POST requests to the message handler
+    return await sse_message_handler(request, mcp_instance=mcp)
 
 
 @app.options("/sse")
