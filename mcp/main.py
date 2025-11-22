@@ -21,88 +21,61 @@ mcp = FastMCP("Debug Context MCP Server")
 @mcp.tool()
 def submit_code_context_mcp(text: str) -> str:
     """
-    Submit code changes with context. REQUIRES MULTIPLE CODE CHUNKS in sequence, each with ACTUAL CODE BLOCKS (5-10 lines), not English descriptions.
+    Submit potential bug areas from codebase analysis. REQUIRES MULTIPLE CODE CHUNKS in sequence, each with ACTUAL CODE BLOCKS (5-10 lines), not English descriptions.
     
-    Format: Repeat this pattern for EACH code chunk that changed:
-    1. [Code Chunk] - Include ACTUAL CODE (5-10 lines) showing what changed, with clear BEFORE and AFTER blocks
-    2. [Explanation] - Brief explanation of what this specific code chunk does
-    3. [Relationships] - How this code chunk relates to OTHER code chunks (reference other chunks by name/file)
+    WORKFLOW: When a user reports a bug/error, scan the codebase to identify potential bug areas related to the reported issue. Send ALL candidate code chunks in ONE tool call.
+    
+    Format: Repeat this pattern for EACH potential bug area found:
+    1. [Code Chunk N] - Include ACTUAL CODE (5-10 lines) that could be causing the bug
+    2. File: <filepath> - Full file path where this code exists
+    3. Lines: <start>-<end> - Line number range using dash format (e.g., "10-25")
+    4. [Explanation] - What specific bug this code chunk might cause AND indicate which related code chunks are problematic vs. which look good (use descriptive text)
+    5. [Relationships] - Structural/logical/data flow relationships to other code chunks (calls, dependencies, data flow) WITHOUT error context
     
     Then continue with the next code chunk using the same pattern.
     
     CRITICAL REQUIREMENTS:
-    - Include MULTIPLE code chunks (not just one)
+    - Scan codebase when user reports a bug/error to find related code
+    - Include MULTIPLE code chunks (not just one) - send ALL potential bug areas in one tool call
     - Each chunk must have REAL, executable code blocks (5-10 lines)
     - Do NOT use English descriptions like "for loop that iterates" - show actual code
-    - Each chunk should reference relationships to other chunks
+    - Include file path and line number range (dash format) for each chunk
+    - Explanation must describe what bug might occur AND indicate which related chunks are problematic vs. good
+    - Relationships should be structural/logical/data flow only (no error context)
     
     Example format (showing MULTIPLE chunks):
     
     [Code Chunk 1]
     File: src/utils.py
+    Lines: 15-24
     
-    BEFORE:
-    def process_data(items):
-        result = []
-        for i in range(len(items)):
-            item = items[i]
-            result.append(item * 2)
-        return result
-    
-    AFTER:
     def process_data(items):
         result = []
         for item in items:
+            if item is None:
+                continue
             result.append(item * 2)
         return result
     
     [Explanation]
-    Refactored the function to use direct iteration over items instead of index-based access, making the code more Pythonic and readable.
+    This function doesn't handle the case where items is None or empty, which could cause a TypeError when iterating. Code Chunk 2 (calculate_totals) is problematic because it calls this function without checking if data is None first. Code Chunk 3 (API handler) looks good as it validates input before calling calculate_totals.
     
     [Relationships]
-    This function is called by calculate_totals() function (see Code Chunk 2) and is used by the API endpoint in src/api/routes.py (see Code Chunk 3).
+    This function is called by calculate_totals() function (see Code Chunk 2). The result is used by the API handler in Code Chunk 3. Receives data from the request processing pipeline.
     
     [Code Chunk 2]
     File: src/calculations.py
+    Lines: 8-12
     
-    BEFORE:
-    def calculate_totals(data):
-        processed = process_data(data)
-        return sum(processed)
-    
-    AFTER:
     def calculate_totals(data):
         processed = process_data(data)
         return sum(processed)
     
     [Explanation]
-    This function calls process_data() from Code Chunk 1 to process the input data before calculating totals.
+    This function calls process_data() without validating that data is None first, which will cause a TypeError. Code Chunk 1 (process_data) is problematic because it doesn't handle None input. Code Chunk 3 (API handler) looks good as it validates input.
     
     [Relationships]
-    Depends on process_data() function from Code Chunk 1. Called by the API handler in Code Chunk 3.
-    
-    [Code Chunk 3]
-    File: src/api/routes.py
-    
-    BEFORE:
-    @app.route('/api/totals')
-    def get_totals():
-        data = request.json
-        totals = calculate_totals(data)
-        return jsonify({'totals': totals})
-    
-    AFTER:
-    @app.route('/api/totals')
-    def get_totals():
-        data = request.json
-        totals = calculate_totals(data)
-        return jsonify({'totals': totals})
-    
-    [Explanation]
-    API endpoint that uses calculate_totals() from Code Chunk 2 to process requests.
-    
-    [Relationships]
-    Calls calculate_totals() from Code Chunk 2, which in turn uses process_data() from Code Chunk 1.
+    Calls process_data() from Code Chunk 1. Called by API handler in Code Chunk 3. Part of the data processing pipeline.
     """
     return submit_code_context(text)
 

@@ -23,13 +23,13 @@ def get_tools_list_schema() -> dict:
             "tools": [
                 {
                     "name": "submit_code_context_mcp",
-                    "description": "Submit MULTIPLE code chunks with context. REQUIRES SEQUENCE: [Code Chunk 1] with BEFORE/AFTER actual code blocks (5-10 lines), [Explanation], [Relationships] → [Code Chunk 2] with BEFORE/AFTER code, [Explanation], [Relationships] → repeat for each changed chunk. CRITICAL: Include MULTIPLE chunks, each with real executable code (not English descriptions). Each chunk's Relationships should reference other chunks. Example: [Code Chunk 1] File: src/utils.py BEFORE: def process_data(items): ... AFTER: def process_data(items): ... [Explanation] Refactored... [Relationships] Called by Code Chunk 2... [Code Chunk 2] File: src/calc.py BEFORE: ... AFTER: ... [Explanation] ... [Relationships] Uses Code Chunk 1...",
+                    "description": "Submit potential bug areas from codebase analysis. When user reports a bug/error, scan codebase to identify potential bug areas and send ALL candidates in ONE tool call. REQUIRES SEQUENCE: [Code Chunk 1] with actual code (5-10 lines), File path, Lines range (dash format), [Explanation] (what bug + which related chunks are problematic vs. good), [Relationships] (structural/logical/data flow only) → [Code Chunk 2] with same format → repeat. CRITICAL: Include MULTIPLE chunks, each with real executable code (not English descriptions). Example: [Code Chunk 1] File: src/utils.py Lines: 15-24 def process_data(items): ... [Explanation] This function doesn't handle None input, which could cause TypeError. Code Chunk 2 is problematic because... Code Chunk 3 looks good... [Relationships] Called by calculate_totals()...",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "text": {
                                 "type": "string",
-                                "description": "Raw text containing MULTIPLE code chunks in sequence. Each chunk must have: [Code Chunk] with BEFORE/AFTER actual code blocks (5-10 lines), [Explanation], [Relationships]. Repeat this pattern for each changed code section. Must include real executable code blocks, not English descriptions."
+                                "description": "Raw text containing MULTIPLE code chunks in sequence. Each chunk must have: [Code Chunk N] with actual code (5-10 lines), File: <filepath>, Lines: <start>-<end> (dash format), [Explanation] (what bug might occur + which related chunks are problematic vs. good), [Relationships] (structural/logical/data flow only, no error context). Repeat this pattern for each potential bug area. Must include real executable code blocks, not English descriptions. Send ALL potential bug areas in one tool call."
                             }
                         },
                         "required": ["text"]
