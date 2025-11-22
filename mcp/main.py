@@ -30,7 +30,7 @@ def submit_code_context_mcp(text: str) -> str:
     2. File: <filepath> - Full file path where this code exists
     3. Lines: <start>-<end> - Line number range using dash format (e.g., "10-25")
     4. [Explanation] - What specific bug this code chunk might cause AND indicate which related code chunks are problematic vs. which look good (use descriptive text)
-    5. [Relationships] - Structural/logical/data flow relationships to other code chunks (calls, dependencies, data flow) WITHOUT error context
+    5. [Relationships] - Structural/logical/data flow relationships to other code chunks (calls, dependencies, data flow) WITHOUT error context. MUST include the actual code from related chunks when referencing them (show the code, file path, and line range)
     
     Then continue with the next code chunk using the same pattern.
     
@@ -42,6 +42,7 @@ def submit_code_context_mcp(text: str) -> str:
     - Include file path and line number range (dash format) for each chunk
     - Explanation must describe what bug might occur AND indicate which related chunks are problematic vs. good
     - Relationships should be structural/logical/data flow only (no error context)
+    - Relationships MUST include actual code from related chunks when referencing them (show code, file path, and line range)
     
     Example format (showing MULTIPLE chunks):
     
@@ -63,6 +64,13 @@ def submit_code_context_mcp(text: str) -> str:
     [Relationships]
     This function is called by calculate_totals() function (see Code Chunk 2). The result is used by the API handler in Code Chunk 3. Receives data from the request processing pipeline.
     
+    Related code from Code Chunk 2:
+    File: src/calculations.py
+    Lines: 8-12
+    def calculate_totals(data):
+        processed = process_data(data)
+        return sum(processed)
+    
     [Code Chunk 2]
     File: src/calculations.py
     Lines: 8-12
@@ -76,6 +84,17 @@ def submit_code_context_mcp(text: str) -> str:
     
     [Relationships]
     Calls process_data() from Code Chunk 1. Called by API handler in Code Chunk 3. Part of the data processing pipeline.
+    
+    Related code from Code Chunk 1:
+    File: src/utils.py
+    Lines: 15-24
+    def process_data(items):
+        result = []
+        for item in items:
+            if item is None:
+                continue
+            result.append(item * 2)
+        return result
     """
     return submit_code_context(text)
 
