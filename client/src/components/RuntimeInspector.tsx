@@ -1,12 +1,13 @@
 import React from 'react';
-import type { RuntimeStep } from '@/lib/types';
+import type { RuntimeStep, Problem } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronRight, CircleCheck, CircleX, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, CircleCheck, CircleX, Loader2, AlertTriangle } from 'lucide-react';
 
 interface RuntimeInspectorProps {
   steps: RuntimeStep[];
   activeStepId: string | null;
   onStepSelect: (stepId: string) => void;
+  problems?: Problem[];
 }
 
 const StatusIcon = ({ status }: { status: RuntimeStep['status'] }) => {
@@ -24,6 +25,7 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
   steps,
   activeStepId,
   onStepSelect,
+  problems = [],
 }) => {
   const [isOpen, setIsOpen] = React.useState(true);
   
@@ -55,6 +57,9 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
                   const isActive = step.id === activeStepId;
                   const statusLabel =
                     step.status.charAt(0).toUpperCase() + step.status.slice(1);
+                  // Check if this step has a warning
+                  const hasWarning = problems.some(p => p.stepId === step.id && p.severity === 'warning');
+                  
                   return (
                     <tr 
                       key={step.id}
@@ -70,6 +75,9 @@ export const RuntimeInspector: React.FC<RuntimeInspectorProps> = ({
                       <td className="px-2 py-1.5 align-top whitespace-nowrap overflow-hidden text-ellipsis">
                         <div className="flex items-center gap-2">
                           <StatusIcon status={step.status} />
+                          {hasWarning && (
+                            <AlertTriangle className="h-3 w-3 shrink-0 text-yellow-500" />
+                          )}
                           <span className="text-[10px] font-semibold uppercase">
                             {statusLabel}
                           </span>

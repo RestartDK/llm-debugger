@@ -36,6 +36,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             steps={steps}
             activeStepId={activeStepId}
             onStepSelect={onStepSelect}
+            problems={problems}
           />
         </ResizablePanel>
         

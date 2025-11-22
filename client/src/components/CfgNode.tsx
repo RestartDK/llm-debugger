@@ -1,18 +1,32 @@
 import React, { memo, useMemo } from 'react';
 import { Handle, Position, type Node, type NodeProps, useNodeConnections } from '@xyflow/react';
-import type { CfgNodeData } from '@/lib/types';
+import type { CfgNodeData, Problem } from '@/lib/types';
 import { cn, getFileIcon } from '@/lib/utils';
 import { CheckCircle2, XCircle, Loader2, AlertTriangle } from 'lucide-react';
 
 // NodeProps expects a Node type; we define one with our custom data
 type CfgFlowNode = Node<CfgNodeData>;
 
+interface CfgNodeProps extends NodeProps<CfgFlowNode> {
+  problems?: Problem[];
+}
+
 const FileIconComponent = ({ fileName, className }: { fileName?: string; className?: string }) => {
   const IconComponent = useMemo(() => getFileIcon(fileName), [fileName]);
   return React.createElement(IconComponent, { className });
 };
 
-const StatusPill = ({ status }: { status: CfgNodeData['status'] }) => {
+const StatusPill = ({ status, hasWarning }: { status: CfgNodeData['status']; hasWarning?: boolean }) => {
+  // Show warning status if there's a warning (takes priority over succeeded, but not over failed)
+  if (hasWarning && status !== 'failed') {
+    return (
+      <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 border border-yellow-200 text-[10px] font-medium">
+        <AlertTriangle className="h-3 w-3" />
+        <span>Warning</span>
+      </div>
+    );
+  }
+
   switch (status) {
     case 'succeeded':
       return (
@@ -30,7 +44,7 @@ const StatusPill = ({ status }: { status: CfgNodeData['status'] }) => {
       );
     case 'pending':
       return (
-        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 border border-yellow-200 text-[10px] font-medium">
+        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200 text-[10px] font-medium">
           <Loader2 className="h-3 w-3 animate-spin" />
           <span>Pending</span>
         </div>
@@ -38,7 +52,7 @@ const StatusPill = ({ status }: { status: CfgNodeData['status'] }) => {
   }
 };
 
-export const CfgNode = memo(({ data, selected, isConnectable }: NodeProps<CfgFlowNode>) => {
+export const CfgNode = memo(({ data, selected, isConnectable, problems = [] }: CfgNodeProps) => {
   const nodeData = data;
   const [showMetadata, setShowMetadata] = React.useState(false);
   const [showError, setShowError] = React.useState(false);
@@ -46,12 +60,18 @@ export const CfgNode = memo(({ data, selected, isConnectable }: NodeProps<CfgFlo
   const targetConnections = useNodeConnections({ handleType: 'target' });
   const sourceConnections = useNodeConnections({ handleType: 'source' });
 
+  // Check if this node has any warnings
+  const hasWarning = useMemo(() => {
+    return problems.some(p => p.blockId === nodeData.blockId && p.severity === 'warning');
+  }, [problems, nodeData.blockId]);
+
   return (
     <div 
       className={cn(
         "relative min-w-[200px] bg-card rounded-lg border shadow-sm transition-all duration-200",
         selected ? "border-primary ring-2 ring-primary/20 shadow-md" : "border-border hover:border-primary/50",
-        nodeData.status === 'failed' && "border-red-300 bg-red-50/10"
+        nodeData.status === 'failed' && "border-red-300 bg-red-50",
+        hasWarning && "border-yellow-300 bg-yellow-50"
       )}
       onMouseEnter={() => setShowMetadata(true)}
       onMouseLeave={() => setShowMetadata(false)}
@@ -81,12 +101,18 @@ export const CfgNode = memo(({ data, selected, isConnectable }: NodeProps<CfgFlo
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 bg-muted/10 rounded-t-lg">
         <span className="text-xs font-bold text-foreground">{nodeData.blockName}</span>
-        <StatusPill status={nodeData.status} />
+        <StatusPill status={nodeData.status} hasWarning={hasWarning} />
       </div>
 
       {/* Body */}
-      <div className="p-3 font-mono text-xs bg-background/50 rounded-b-lg overflow-hidden">
-         <pre className="whitespace-pre-wrap wrap-break-word text-foreground/90">
+      <div className={cn(
+        "p-3 font-mono text-xs rounded-b-lg overflow-hidden",
+        nodeData.status === 'failed' ? "bg-red-50" : hasWarning ? "bg-yellow-50" : "bg-background/50"
+      )}>
+         <pre className={cn(
+           "whitespace-pre-wrap wrap-break-word",
+           nodeData.status === 'failed' ? "text-red-900" : hasWarning ? "text-yellow-900" : "text-foreground/90"
+         )}>
            {nodeData.codeSnippet}
          </pre>
       </div>

@@ -11,17 +11,19 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { CfgNode } from './CfgNode';
-import type { CfgNodeData } from '@/lib/types';
+import type { CfgNodeData, Problem } from '@/lib/types';
 
-const nodeTypes: NodeTypes = {
-  cfgNode: CfgNode,
-};
+// Create node types with access to problems
+const createNodeTypes = (problems: Problem[]): NodeTypes => ({
+  cfgNode: (props) => <CfgNode {...props} problems={problems} />,
+});
 
 interface CfgCanvasProps {
   initialNodes: Node<CfgNodeData>[];
   initialEdges: Edge[];
   activeNodeId: string | null;
   onNodeClick: (nodeId: string) => void;
+  problems?: Problem[];
 }
 
 export const CfgCanvas: React.FC<CfgCanvasProps> = ({
@@ -29,10 +31,14 @@ export const CfgCanvas: React.FC<CfgCanvasProps> = ({
   initialEdges,
   activeNodeId,
   onNodeClick,
+  problems = [],
 }) => {
   // We manage nodes/edges locally for layout, but selection is driven by props + local click
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<CfgNodeData>>(initialNodes);
   const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  
+  // Create node types with problems
+  const nodeTypes = React.useMemo(() => createNodeTypes(problems), [problems]);
 
   // Sync selection from props
   React.useEffect(() => {
