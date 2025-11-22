@@ -131,12 +131,49 @@ async def sse_endpoint(request: Request):
     return await sse_endpoint_handler(request)
 
 
+@app.options("/sse")
+async def sse_options():
+    """Handle CORS preflight for SSE endpoint."""
+    from fastapi.responses import Response
+    return Response(
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
+@app.options("/sse/message")
+async def sse_message_options():
+    """Handle CORS preflight for SSE message endpoint."""
+    from fastapi.responses import Response
+    return Response(
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
 @app.post("/sse/message")
 async def sse_message_endpoint(request: Request):
-    """Handle POST requests for MCP protocol messages."""
+    """Handle POST requests for MCP protocol messages.
+    
+    For SSE transport: responses are queued and sent via the SSE stream.
+    For direct HTTP: responses are returned directly.
+    """
     return await sse_message_handler(request)
 
 
 if __name__ == "__main__":
+    import sys
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    # Check if running in stdio mode (for MCP) or HTTP mode
+    # If stdin is a TTY, run HTTP server; otherwise run stdio MCP server
+    if sys.stdin.isatty():
+        # Running interactively - start HTTP server
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    else:
+        # Running via stdio (for Cursor MCP) - run MCP server
+        mcp.run()
