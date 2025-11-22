@@ -87,7 +87,7 @@ export const CfgNode = memo(({ data, selected, isConnectable, problems = [] }: C
       {showMetadata && nodeData.file && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-max px-3 py-1.5 bg-popover text-popover-foreground text-xs rounded shadow-md border border-border animate-in fade-in zoom-in-95 duration-100">
           <div className="flex items-center gap-2">
-            <FileIconComponent fileName={nodeData.file} className="h-3 w-3 text-muted-foreground" />
+            <FileIconComponent fileName={nodeData.file} className="h-4 w-4 text-muted-foreground" />
             <span className="font-mono">{nodeData.file}</span>
             {nodeData.lineStart !== undefined && nodeData.lineEnd !== undefined && (
               <span className="text-muted-foreground">
