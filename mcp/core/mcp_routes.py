@@ -93,7 +93,7 @@ async def sse_endpoint_handler(request: Request) -> StreamingResponse:
     )
 
 
-async def sse_message_handler(request: Request) -> dict:
+async def sse_message_handler(request: Request, mcp_instance=None) -> dict:
     """Handle POST requests for MCP protocol messages.
     
     Processes MCP JSON-RPC requests and returns responses.
@@ -109,7 +109,7 @@ async def sse_message_handler(request: Request) -> dict:
         connection_id = request.headers.get("x-connection-id") or request.query_params.get("connection_id")
         
         # Process the request and get response
-        response = await process_mcp_request(method, params, request_id)
+        response = await process_mcp_request(method, params, request_id, mcp_instance)
         
         # If we have a connection ID, also queue response for SSE stream
         if connection_id and connection_id in sse_connections:
@@ -126,13 +126,40 @@ async def sse_message_handler(request: Request) -> dict:
         return error_response
 
 
-async def process_mcp_request(method: str, params: dict, request_id: Optional[int]) -> dict:
-    """Process an MCP request and return the response."""
+async def process_mcp_request(method: str, params: dict, request_id: Optional[int], mcp_instance=None) -> dict:
+    """Process an MCP request and return the response.
+    
+    Args:
+        method: MCP method name
+        params: Method parameters
+        request_id: Request ID
+        mcp_instance: Optional FastMCP instance for tool discovery
+    """
     # Handle MCP tool call
     if method == "tools/call":
         tool_name = params.get("name", "")
         tool_args = params.get("arguments", {})
         
+        # Try to use FastMCP's tool if available, otherwise fall back to manual handling
+        if mcp_instance and hasattr(mcp_instance, '_tools') and tool_name in mcp_instance._tools:
+            try:
+                tool_func = mcp_instance._tools[tool_name]
+                result = tool_func(**tool_args)
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "content": [{"type": "text", "text": str(result)}]
+                    }
+                }
+            except Exception as e:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32603, "message": f"Tool execution error: {str(e)}"}
+                }
+        
+        # Manual tool handling (for SSE mode)
         if tool_name == "submit_code_context_mcp":
             text = tool_args.get("text", "")
             if not text:
@@ -165,11 +192,13 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
             "result": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {
-                    "tools": {}
+                    "tools": {
+                        "listChanged": True
+                    }
                 },
                 "serverInfo": {
                     "name": "Debug Context MCP Server",
-                    "version": "0.1.0"
+                    "version": "0.2.0"
                 }
             }
         }

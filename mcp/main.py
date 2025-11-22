@@ -117,7 +117,7 @@ async def sse_message_endpoint(request: Request):
     For SSE transport: responses are queued and sent via the SSE stream.
     For direct HTTP: responses are returned directly.
     """
-    return await sse_message_handler(request)
+    return await sse_message_handler(request, mcp_instance=mcp)
 
 
 if __name__ == "__main__":
