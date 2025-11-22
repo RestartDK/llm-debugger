@@ -1,0 +1,2213 @@
+{
+  "project": "generated_project",
+  "files": {
+    "/project/app/main.py": {
+      "functions": {
+        "main": {
+          "entry_node": "main.py.main.entry_1",
+          "exit_node": "main.py.main.exit_2",
+          "nodes": [
+            {
+              "id": "main.py.main.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "main.py.main.assign_3",
+              "type": "ASSIGN",
+              "text": "numbers = load_numbers('data/input.txt')",
+              "line": 6,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "main.py.main.call_4",
+              "type": "CALL",
+              "text": "load_numbers('data/input.txt')",
+              "line": 6,
+              "indent": 0,
+              "metadata": {
+                "called_function": "load_numbers"
+              }
+            },
+            {
+              "id": "main.py.main.expr_5",
+              "type": "EXPR",
+              "text": "print('Loaded numbers:', numbers)",
+              "line": 7,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "main.py.main.call_6",
+              "type": "CALL",
+              "text": "print('Loaded numbers:', numbers)",
+              "line": 7,
+              "indent": 0,
+              "metadata": {
+                "called_function": "print"
+              }
+            },
+            {
+              "id": "main.py.main.assign_7",
+              "type": "ASSIGN",
+              "text": "avg = compute_average(numbers)",
+              "line": 9,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "main.py.main.call_8",
+              "type": "CALL",
+              "text": "compute_average(numbers)",
+              "line": 9,
+              "indent": 0,
+              "metadata": {
+                "called_function": "compute_average"
+              }
+            },
+            {
+              "id": "main.py.main.expr_9",
+              "type": "EXPR",
+              "text": "print('Average is:', avg)",
+              "line": 10,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "main.py.main.call_10",
+              "type": "CALL",
+              "text": "print('Average is:', avg)",
+              "line": 10,
+              "indent": 0,
+              "metadata": {
+                "called_function": "print"
+              }
+            },
+            {
+              "id": "main.py.main.expr_11",
+              "type": "EXPR",
+              "text": "print('Factorial of average:', compute_factorial(avg))",
+              "line": 13,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "main.py.main.call_12",
+              "type": "CALL",
+              "text": "print('Factorial of average:', compute_factorial(avg))",
+              "line": 13,
+              "indent": 0,
+              "metadata": {
+                "called_function": "print"
+              }
+            },
+            {
+              "id": "main.py.main.call_13",
+              "type": "CALL",
+              "text": "compute_factorial(avg)",
+              "line": 13,
+              "indent": 0,
+              "metadata": {
+                "called_function": "compute_factorial"
+              }
+            },
+            {
+              "id": "main.py.main.return_14",
+              "type": "RETURN",
+              "text": "return",
+              "line": 16,
+              "indent": 0,
+              "metadata": {
+                "returns_value": false
+              }
+            },
+            {
+              "id": "main.py.main.expr_15",
+              "type": "EXPR",
+              "text": "print('This will never be printed')",
+              "line": 17,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "main.py.main.call_16",
+              "type": "CALL",
+              "text": "print('This will never be printed')",
+              "line": 17,
+              "indent": 0,
+              "metadata": {
+                "called_function": "print"
+              }
+            },
+            {
+              "id": "main.py.main.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "main.py.main.entry_1",
+              "to": "main.py.main.assign_3",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.assign_3",
+              "to": "main.py.main.call_4",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.call_4",
+              "to": "main.py.main.expr_5",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.expr_5",
+              "to": "main.py.main.call_6",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.call_6",
+              "to": "main.py.main.assign_7",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.assign_7",
+              "to": "main.py.main.call_8",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.call_8",
+              "to": "main.py.main.expr_9",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.expr_9",
+              "to": "main.py.main.call_10",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.call_10",
+              "to": "main.py.main.expr_11",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.expr_11",
+              "to": "main.py.main.call_12",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.call_12",
+              "to": "main.py.main.call_13",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.call_13",
+              "to": "main.py.main.return_14",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.return_14",
+              "to": "main.py.main.exit_2",
+              "type": "return"
+            },
+            {
+              "from": "main.py.main.expr_15",
+              "to": "main.py.main.call_16",
+              "type": "control"
+            },
+            {
+              "from": "main.py.main.call_16",
+              "to": "main.py.main.exit_2",
+              "type": "control"
+            }
+          ]
+        },
+        "<module>": {
+          "entry_node": "main.py.<module>.entry_1",
+          "exit_node": "main.py.<module>.exit_2",
+          "nodes": [
+            {
+              "id": "main.py.<module>.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "main.py.<module>.if_3",
+              "type": "IF",
+              "text": "if __name__ == '__main__':",
+              "line": 20,
+              "indent": 0,
+              "metadata": {
+                "condition": "__name__ == '__main__'"
+              }
+            },
+            {
+              "id": "main.py.<module>.expr_4",
+              "type": "EXPR",
+              "text": "main()",
+              "line": 21,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "main.py.<module>.call_5",
+              "type": "CALL",
+              "text": "main()",
+              "line": 21,
+              "indent": 0,
+              "metadata": {
+                "called_function": "main"
+              }
+            },
+            {
+              "id": "main.py.<module>.join_6",
+              "type": "JOIN",
+              "text": "join_after_if_line_20",
+              "line": 20,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "main.py.<module>.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "main.py.<module>.entry_1",
+              "to": "main.py.<module>.if_3",
+              "type": "control"
+            },
+            {
+              "from": "main.py.<module>.if_3",
+              "to": "main.py.<module>.expr_4",
+              "type": "control"
+            },
+            {
+              "from": "main.py.<module>.expr_4",
+              "to": "main.py.<module>.call_5",
+              "type": "control"
+            },
+            {
+              "from": "main.py.<module>.if_3",
+              "to": "main.py.<module>.call_5",
+              "type": "control",
+              "label": "true_branch"
+            },
+            {
+              "from": "main.py.<module>.if_3",
+              "to": "main.py.<module>.exit_2",
+              "type": "control",
+              "label": "false_branch"
+            },
+            {
+              "from": "main.py.<module>.call_5",
+              "to": "main.py.<module>.join_6",
+              "type": "control",
+              "label": "body_to_join"
+            },
+            {
+              "from": "main.py.<module>.join_6",
+              "to": "main.py.<module>.exit_2",
+              "type": "control"
+            }
+          ]
+        }
+      }
+    },
+    "/project/app/utils/data_loader.py": {
+      "functions": {
+        "load_numbers": {
+          "entry_node": "data_loader.py.load_numbers.entry_1",
+          "exit_node": "data_loader.py.load_numbers.exit_2",
+          "nodes": [
+            {
+              "id": "data_loader.py.load_numbers.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "data_loader.py.load_numbers.assign_3",
+              "type": "ASSIGN",
+              "text": "numbers = []",
+              "line": 4,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "data_loader.py.load_numbers.for_4",
+              "type": "FOR",
+              "text": "for line in path:",
+              "line": 5,
+              "indent": 0,
+              "metadata": {
+                "iterator": "path"
+              }
+            },
+            {
+              "id": "data_loader.py.load_numbers.try_5",
+              "type": "TRY",
+              "text": "try:",
+              "line": 6,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "data_loader.py.load_numbers.expr_6",
+              "type": "EXPR",
+              "text": "numbers.append(int(line))",
+              "line": 7,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "data_loader.py.load_numbers.call_7",
+              "type": "CALL",
+              "text": "numbers.append(int(line))",
+              "line": 7,
+              "indent": 0,
+              "metadata": {
+                "called_function": "numbers.append"
+              }
+            },
+            {
+              "id": "data_loader.py.load_numbers.call_8",
+              "type": "CALL",
+              "text": "int(line)",
+              "line": 7,
+              "indent": 0,
+              "metadata": {
+                "called_function": "int"
+              }
+            },
+            {
+              "id": "data_loader.py.load_numbers.except_9",
+              "type": "EXCEPT",
+              "text": "except Exception:",
+              "line": 8,
+              "indent": 0,
+              "metadata": {
+                "exception_type": "Exception"
+              }
+            },
+            {
+              "id": "data_loader.py.load_numbers.join_10",
+              "type": "JOIN",
+              "text": "join_after_try_line_6",
+              "line": 6,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "data_loader.py.load_numbers.loop_exit_11",
+              "type": "LOOP_EXIT",
+              "text": "exit_for_line_5",
+              "line": 5,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "data_loader.py.load_numbers.return_12",
+              "type": "RETURN",
+              "text": "return numbers",
+              "line": 10,
+              "indent": 0,
+              "metadata": {
+                "returns_value": true
+              }
+            },
+            {
+              "id": "data_loader.py.load_numbers.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "data_loader.py.load_numbers.entry_1",
+              "to": "data_loader.py.load_numbers.assign_3",
+              "type": "control"
+            },
+            {
+              "from": "data_loader.py.load_numbers.assign_3",
+              "to": "data_loader.py.load_numbers.for_4",
+              "type": "control"
+            },
+            {
+              "from": "data_loader.py.load_numbers.for_4",
+              "to": "data_loader.py.load_numbers.try_5",
+              "type": "control"
+            },
+            {
+              "from": "data_loader.py.load_numbers.try_5",
+              "to": "data_loader.py.load_numbers.expr_6",
+              "type": "control"
+            },
+            {
+              "from": "data_loader.py.load_numbers.expr_6",
+              "to": "data_loader.py.load_numbers.call_7",
+              "type": "control"
+            },
+            {
+              "from": "data_loader.py.load_numbers.call_7",
+              "to": "data_loader.py.load_numbers.call_8",
+              "type": "control"
+            },
+            {
+              "from": "data_loader.py.load_numbers.try_5",
+              "to": "data_loader.py.load_numbers.except_9",
+              "type": "exception"
+            },
+            {
+              "from": "data_loader.py.load_numbers.call_8",
+              "to": "data_loader.py.load_numbers.join_10",
+              "type": "control",
+              "label": "try_to_join"
+            },
+            {
+              "from": "data_loader.py.load_numbers.except_9",
+              "to": "data_loader.py.load_numbers.join_10",
+              "type": "control",
+              "label": "except_to_join"
+            },
+            {
+              "from": "data_loader.py.load_numbers.join_10",
+              "to": "data_loader.py.load_numbers.for_4",
+              "type": "control",
+              "label": "loop_continue"
+            },
+            {
+              "from": "data_loader.py.load_numbers.for_4",
+              "to": "data_loader.py.load_numbers.loop_exit_11",
+              "type": "control",
+              "label": "loop_exit"
+            },
+            {
+              "from": "data_loader.py.load_numbers.loop_exit_11",
+              "to": "data_loader.py.load_numbers.return_12",
+              "type": "control"
+            },
+            {
+              "from": "data_loader.py.load_numbers.return_12",
+              "to": "data_loader.py.load_numbers.exit_2",
+              "type": "return"
+            }
+          ]
+        },
+        "<module>": {
+          "entry_node": "data_loader.py.<module>.entry_1",
+          "exit_node": "data_loader.py.<module>.exit_2",
+          "nodes": [
+            {
+              "id": "data_loader.py.<module>.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "data_loader.py.<module>.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "data_loader.py.<module>.entry_1",
+              "to": "data_loader.py.<module>.exit_2",
+              "type": "control"
+            }
+          ]
+        }
+      }
+    },
+    "/project/app/utils/math_ops.py": {
+      "functions": {
+        "compute_average": {
+          "entry_node": "math_ops.py.compute_average.entry_1",
+          "exit_node": "math_ops.py.compute_average.exit_2",
+          "nodes": [
+            {
+              "id": "math_ops.py.compute_average.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "math_ops.py.compute_average.if_3",
+              "type": "IF",
+              "text": "if len(nums) == 0:",
+              "line": 5,
+              "indent": 0,
+              "metadata": {
+                "condition": "len(nums) == 0"
+              }
+            },
+            {
+              "id": "math_ops.py.compute_average.return_4",
+              "type": "RETURN",
+              "text": "return None",
+              "line": 6,
+              "indent": 0,
+              "metadata": {
+                "returns_value": true
+              }
+            },
+            {
+              "id": "math_ops.py.compute_average.join_5",
+              "type": "JOIN",
+              "text": "join_after_if_line_5",
+              "line": 5,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "math_ops.py.compute_average.assign_6",
+              "type": "ASSIGN",
+              "text": "total = 0",
+              "line": 8,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "math_ops.py.compute_average.for_7",
+              "type": "FOR",
+              "text": "for i in range(len(nums) + 1):",
+              "line": 9,
+              "indent": 0,
+              "metadata": {
+                "iterator": "range(len(nums) + 1)"
+              }
+            },
+            {
+              "id": "math_ops.py.compute_average.loop_exit_8",
+              "type": "LOOP_EXIT",
+              "text": "exit_for_line_9",
+              "line": 9,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "math_ops.py.compute_average.return_9",
+              "type": "RETURN",
+              "text": "return total / len(nums)",
+              "line": 11,
+              "indent": 0,
+              "metadata": {
+                "returns_value": true
+              }
+            },
+            {
+              "id": "math_ops.py.compute_average.call_10",
+              "type": "CALL",
+              "text": "len(nums)",
+              "line": 11,
+              "indent": 0,
+              "metadata": {
+                "called_function": "len"
+              }
+            },
+            {
+              "id": "math_ops.py.compute_average.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "math_ops.py.compute_average.entry_1",
+              "to": "math_ops.py.compute_average.if_3",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.compute_average.if_3",
+              "to": "math_ops.py.compute_average.return_4",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.compute_average.return_4",
+              "to": "math_ops.py.compute_average.exit_2",
+              "type": "return"
+            },
+            {
+              "from": "math_ops.py.compute_average.if_3",
+              "to": "math_ops.py.compute_average.return_4",
+              "type": "control",
+              "label": "true_branch"
+            },
+            {
+              "from": "math_ops.py.compute_average.if_3",
+              "to": "math_ops.py.compute_average.exit_2",
+              "type": "control",
+              "label": "false_branch"
+            },
+            {
+              "from": "math_ops.py.compute_average.join_5",
+              "to": "math_ops.py.compute_average.assign_6",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.compute_average.assign_6",
+              "to": "math_ops.py.compute_average.for_7",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.compute_average.for_7",
+              "to": "math_ops.py.compute_average.for_7",
+              "type": "control",
+              "label": "loop_continue"
+            },
+            {
+              "from": "math_ops.py.compute_average.for_7",
+              "to": "math_ops.py.compute_average.loop_exit_8",
+              "type": "control",
+              "label": "loop_exit"
+            },
+            {
+              "from": "math_ops.py.compute_average.loop_exit_8",
+              "to": "math_ops.py.compute_average.return_9",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.compute_average.return_9",
+              "to": "math_ops.py.compute_average.exit_2",
+              "type": "return"
+            },
+            {
+              "from": "math_ops.py.compute_average.call_10",
+              "to": "math_ops.py.compute_average.exit_2",
+              "type": "control"
+            }
+          ]
+        },
+        "compute_factorial": {
+          "entry_node": "math_ops.py.compute_factorial.entry_1",
+          "exit_node": "math_ops.py.compute_factorial.exit_2",
+          "nodes": [
+            {
+              "id": "math_ops.py.compute_factorial.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "math_ops.py.compute_factorial.if_3",
+              "type": "IF",
+              "text": "if n == 0:",
+              "line": 16,
+              "indent": 0,
+              "metadata": {
+                "condition": "n == 0"
+              }
+            },
+            {
+              "id": "math_ops.py.compute_factorial.return_4",
+              "type": "RETURN",
+              "text": "return 0",
+              "line": 17,
+              "indent": 0,
+              "metadata": {
+                "returns_value": true
+              }
+            },
+            {
+              "id": "math_ops.py.compute_factorial.join_5",
+              "type": "JOIN",
+              "text": "join_after_if_line_16",
+              "line": 16,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "math_ops.py.compute_factorial.if_6",
+              "type": "IF",
+              "text": "if n < 0:",
+              "line": 20,
+              "indent": 0,
+              "metadata": {
+                "condition": "n < 0"
+              }
+            },
+            {
+              "id": "math_ops.py.compute_factorial.call_7",
+              "type": "CALL",
+              "text": "Exception('Negative input not allowed')",
+              "line": 21,
+              "indent": 0,
+              "metadata": {
+                "called_function": "Exception"
+              }
+            },
+            {
+              "id": "math_ops.py.compute_factorial.join_8",
+              "type": "JOIN",
+              "text": "join_after_if_line_20",
+              "line": 20,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "math_ops.py.compute_factorial.return_9",
+              "type": "RETURN",
+              "text": "return n * compute_factorial(n - 1)",
+              "line": 24,
+              "indent": 0,
+              "metadata": {
+                "returns_value": true
+              }
+            },
+            {
+              "id": "math_ops.py.compute_factorial.call_10",
+              "type": "CALL",
+              "text": "compute_factorial(n - 1)",
+              "line": 24,
+              "indent": 0,
+              "metadata": {
+                "called_function": "compute_factorial"
+              }
+            },
+            {
+              "id": "math_ops.py.compute_factorial.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "math_ops.py.compute_factorial.entry_1",
+              "to": "math_ops.py.compute_factorial.if_3",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.if_3",
+              "to": "math_ops.py.compute_factorial.return_4",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.return_4",
+              "to": "math_ops.py.compute_factorial.exit_2",
+              "type": "return"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.if_3",
+              "to": "math_ops.py.compute_factorial.return_4",
+              "type": "control",
+              "label": "true_branch"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.if_3",
+              "to": "math_ops.py.compute_factorial.exit_2",
+              "type": "control",
+              "label": "false_branch"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.join_5",
+              "to": "math_ops.py.compute_factorial.if_6",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.if_6",
+              "to": "math_ops.py.compute_factorial.call_7",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.if_6",
+              "to": "math_ops.py.compute_factorial.call_7",
+              "type": "control",
+              "label": "true_branch"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.if_6",
+              "to": "math_ops.py.compute_factorial.exit_2",
+              "type": "control",
+              "label": "false_branch"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.call_7",
+              "to": "math_ops.py.compute_factorial.join_8",
+              "type": "control",
+              "label": "body_to_join"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.join_8",
+              "to": "math_ops.py.compute_factorial.return_9",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.return_9",
+              "to": "math_ops.py.compute_factorial.exit_2",
+              "type": "return"
+            },
+            {
+              "from": "math_ops.py.compute_factorial.call_10",
+              "to": "math_ops.py.compute_factorial.exit_2",
+              "type": "control"
+            }
+          ]
+        },
+        "<module>": {
+          "entry_node": "math_ops.py.<module>.entry_1",
+          "exit_node": "math_ops.py.<module>.exit_2",
+          "nodes": [
+            {
+              "id": "math_ops.py.<module>.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "math_ops.py.<module>.assign_3",
+              "type": "ASSIGN",
+              "text": "global_cache = {}",
+              "line": 1,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "math_ops.py.<module>.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "math_ops.py.<module>.entry_1",
+              "to": "math_ops.py.<module>.assign_3",
+              "type": "control"
+            },
+            {
+              "from": "math_ops.py.<module>.assign_3",
+              "to": "math_ops.py.<module>.exit_2",
+              "type": "control"
+            }
+          ]
+        }
+      }
+    },
+    "/project/app/services/processor.py": {
+      "functions": {
+        "NumberProcessor.__init__": {
+          "entry_node": "processor.py.NumberProcessor.__init__.entry_1",
+          "exit_node": "processor.py.NumberProcessor.__init__.exit_2",
+          "nodes": [
+            {
+              "id": "processor.py.NumberProcessor.__init__.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.__init__.assign_3",
+              "type": "ASSIGN",
+              "text": "self.items = items",
+              "line": 5,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.__init__.assign_4",
+              "type": "ASSIGN",
+              "text": "self.cache = {}",
+              "line": 6,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.__init__.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "processor.py.NumberProcessor.__init__.entry_1",
+              "to": "processor.py.NumberProcessor.__init__.assign_3",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.__init__.assign_3",
+              "to": "processor.py.NumberProcessor.__init__.assign_4",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.__init__.assign_4",
+              "to": "processor.py.NumberProcessor.__init__.exit_2",
+              "type": "control"
+            }
+          ]
+        },
+        "NumberProcessor.process": {
+          "entry_node": "processor.py.NumberProcessor.process.entry_1",
+          "exit_node": "processor.py.NumberProcessor.process.exit_2",
+          "nodes": [
+            {
+              "id": "processor.py.NumberProcessor.process.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.assign_3",
+              "type": "ASSIGN",
+              "text": "avg = compute_average(self.items)",
+              "line": 9,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.call_4",
+              "type": "CALL",
+              "text": "compute_average(self.items)",
+              "line": 9,
+              "indent": 0,
+              "metadata": {
+                "called_function": "compute_average"
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.assign_5",
+              "type": "ASSIGN",
+              "text": "results = [i * avg for j in range(len(self.items))]",
+              "line": 12,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.call_6",
+              "type": "CALL",
+              "text": "range(len(self.items))",
+              "line": 12,
+              "indent": 0,
+              "metadata": {
+                "called_function": "range"
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.call_7",
+              "type": "CALL",
+              "text": "len(self.items)",
+              "line": 12,
+              "indent": 0,
+              "metadata": {
+                "called_function": "len"
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.if_8",
+              "type": "IF",
+              "text": "if avg > 10:",
+              "line": 14,
+              "indent": 0,
+              "metadata": {
+                "condition": "avg > 10"
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.expr_9",
+              "type": "EXPR",
+              "text": "print('Large average!')",
+              "line": 15,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.call_10",
+              "type": "CALL",
+              "text": "print('Large average!')",
+              "line": 15,
+              "indent": 0,
+              "metadata": {
+                "called_function": "print"
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.expr_11",
+              "type": "EXPR",
+              "text": "print('Small average!')",
+              "line": 17,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.call_12",
+              "type": "CALL",
+              "text": "print('Small average!')",
+              "line": 17,
+              "indent": 0,
+              "metadata": {
+                "called_function": "print"
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.join_13",
+              "type": "JOIN",
+              "text": "join_after_if_line_14",
+              "line": 14,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.return_14",
+              "type": "RETURN",
+              "text": "return results",
+              "line": 19,
+              "indent": 0,
+              "metadata": {
+                "returns_value": true
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.process.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "processor.py.NumberProcessor.process.entry_1",
+              "to": "processor.py.NumberProcessor.process.assign_3",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.assign_3",
+              "to": "processor.py.NumberProcessor.process.call_4",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.call_4",
+              "to": "processor.py.NumberProcessor.process.assign_5",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.assign_5",
+              "to": "processor.py.NumberProcessor.process.call_6",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.call_6",
+              "to": "processor.py.NumberProcessor.process.call_7",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.call_7",
+              "to": "processor.py.NumberProcessor.process.if_8",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.if_8",
+              "to": "processor.py.NumberProcessor.process.expr_9",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.expr_9",
+              "to": "processor.py.NumberProcessor.process.call_10",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.if_8",
+              "to": "processor.py.NumberProcessor.process.expr_11",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.expr_11",
+              "to": "processor.py.NumberProcessor.process.call_12",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.if_8",
+              "to": "processor.py.NumberProcessor.process.call_10",
+              "type": "control",
+              "label": "true_branch"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.if_8",
+              "to": "processor.py.NumberProcessor.process.call_12",
+              "type": "control",
+              "label": "false_branch"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.call_10",
+              "to": "processor.py.NumberProcessor.process.join_13",
+              "type": "control",
+              "label": "body_to_join"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.call_12",
+              "to": "processor.py.NumberProcessor.process.join_13",
+              "type": "control",
+              "label": "orelse_to_join"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.join_13",
+              "to": "processor.py.NumberProcessor.process.return_14",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.process.return_14",
+              "to": "processor.py.NumberProcessor.process.exit_2",
+              "type": "return"
+            }
+          ]
+        },
+        "NumberProcessor.unstable_sort": {
+          "entry_node": "processor.py.NumberProcessor.unstable_sort.entry_1",
+          "exit_node": "processor.py.NumberProcessor.unstable_sort.exit_2",
+          "nodes": [
+            {
+              "id": "processor.py.NumberProcessor.unstable_sort.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.unstable_sort.for_3",
+              "type": "FOR",
+              "text": "for i in range(len(self.items)):",
+              "line": 23,
+              "indent": 0,
+              "metadata": {
+                "iterator": "range(len(self.items))"
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.unstable_sort.for_4",
+              "type": "FOR",
+              "text": "for j in range(i):",
+              "line": 24,
+              "indent": 0,
+              "metadata": {
+                "iterator": "range(i)"
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.unstable_sort.if_5",
+              "type": "IF",
+              "text": "if self.items[j] < self.items[i]:",
+              "line": 25,
+              "indent": 0,
+              "metadata": {
+                "condition": "self.items[j] < self.items[i]"
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.unstable_sort.assign_6",
+              "type": "ASSIGN",
+              "text": "self.items[i], self.items[j] = self.items[j], self.items[i]",
+              "line": 26,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.unstable_sort.join_7",
+              "type": "JOIN",
+              "text": "join_after_if_line_25",
+              "line": 25,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.unstable_sort.loop_exit_8",
+              "type": "LOOP_EXIT",
+              "text": "exit_for_line_24",
+              "line": 24,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.unstable_sort.loop_exit_9",
+              "type": "LOOP_EXIT",
+              "text": "exit_for_line_23",
+              "line": 23,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.NumberProcessor.unstable_sort.return_10",
+              "type": "RETURN",
+              "text": "return self.items",
+              "line": 27,
+              "indent": 0,
+              "metadata": {
+                "returns_value": true
+              }
+            },
+            {
+              "id": "processor.py.NumberProcessor.unstable_sort.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.entry_1",
+              "to": "processor.py.NumberProcessor.unstable_sort.for_3",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.for_3",
+              "to": "processor.py.NumberProcessor.unstable_sort.for_4",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.for_4",
+              "to": "processor.py.NumberProcessor.unstable_sort.if_5",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.if_5",
+              "to": "processor.py.NumberProcessor.unstable_sort.assign_6",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.if_5",
+              "to": "processor.py.NumberProcessor.unstable_sort.assign_6",
+              "type": "control",
+              "label": "true_branch"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.if_5",
+              "to": "processor.py.NumberProcessor.unstable_sort.exit_2",
+              "type": "control",
+              "label": "false_branch"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.assign_6",
+              "to": "processor.py.NumberProcessor.unstable_sort.join_7",
+              "type": "control",
+              "label": "body_to_join"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.join_7",
+              "to": "processor.py.NumberProcessor.unstable_sort.for_4",
+              "type": "control",
+              "label": "loop_continue"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.for_4",
+              "to": "processor.py.NumberProcessor.unstable_sort.loop_exit_8",
+              "type": "control",
+              "label": "loop_exit"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.loop_exit_8",
+              "to": "processor.py.NumberProcessor.unstable_sort.for_3",
+              "type": "control",
+              "label": "loop_continue"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.for_3",
+              "to": "processor.py.NumberProcessor.unstable_sort.loop_exit_9",
+              "type": "control",
+              "label": "loop_exit"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.loop_exit_9",
+              "to": "processor.py.NumberProcessor.unstable_sort.return_10",
+              "type": "control"
+            },
+            {
+              "from": "processor.py.NumberProcessor.unstable_sort.return_10",
+              "to": "processor.py.NumberProcessor.unstable_sort.exit_2",
+              "type": "return"
+            }
+          ]
+        },
+        "<module>": {
+          "entry_node": "processor.py.<module>.entry_1",
+          "exit_node": "processor.py.<module>.exit_2",
+          "nodes": [
+            {
+              "id": "processor.py.<module>.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "processor.py.<module>.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "processor.py.<module>.entry_1",
+              "to": "processor.py.<module>.exit_2",
+              "type": "control"
+            }
+          ]
+        }
+      }
+    },
+    "/project/app/services/report.py": {
+      "functions": {
+        "generate_report": {
+          "entry_node": "report.py.generate_report.entry_1",
+          "exit_node": "report.py.generate_report.exit_2",
+          "nodes": [
+            {
+              "id": "report.py.generate_report.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "report.py.generate_report.assign_3",
+              "type": "ASSIGN",
+              "text": "processor = NumberProcessor(data)",
+              "line": 6,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "report.py.generate_report.call_4",
+              "type": "CALL",
+              "text": "NumberProcessor(data)",
+              "line": 6,
+              "indent": 0,
+              "metadata": {
+                "called_function": "NumberProcessor"
+              }
+            },
+            {
+              "id": "report.py.generate_report.assign_5",
+              "type": "ASSIGN",
+              "text": "processed = processor.process()",
+              "line": 7,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "report.py.generate_report.call_6",
+              "type": "CALL",
+              "text": "processor.process()",
+              "line": 7,
+              "indent": 0,
+              "metadata": {
+                "called_function": "processor.process"
+              }
+            },
+            {
+              "id": "report.py.generate_report.return_7",
+              "type": "RETURN",
+              "text": "return data",
+              "line": 10,
+              "indent": 0,
+              "metadata": {
+                "returns_value": true
+              }
+            },
+            {
+              "id": "report.py.generate_report.if_8",
+              "type": "IF",
+              "text": "if len(data) == 0:",
+              "line": 13,
+              "indent": 0,
+              "metadata": {
+                "condition": "len(data) == 0"
+              }
+            },
+            {
+              "id": "report.py.generate_report.expr_9",
+              "type": "EXPR",
+              "text": "print('Empty data')",
+              "line": 14,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "report.py.generate_report.call_10",
+              "type": "CALL",
+              "text": "print('Empty data')",
+              "line": 14,
+              "indent": 0,
+              "metadata": {
+                "called_function": "print"
+              }
+            },
+            {
+              "id": "report.py.generate_report.join_11",
+              "type": "JOIN",
+              "text": "join_after_if_line_13",
+              "line": 13,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "report.py.generate_report.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "report.py.generate_report.entry_1",
+              "to": "report.py.generate_report.assign_3",
+              "type": "control"
+            },
+            {
+              "from": "report.py.generate_report.assign_3",
+              "to": "report.py.generate_report.call_4",
+              "type": "control"
+            },
+            {
+              "from": "report.py.generate_report.call_4",
+              "to": "report.py.generate_report.assign_5",
+              "type": "control"
+            },
+            {
+              "from": "report.py.generate_report.assign_5",
+              "to": "report.py.generate_report.call_6",
+              "type": "control"
+            },
+            {
+              "from": "report.py.generate_report.call_6",
+              "to": "report.py.generate_report.return_7",
+              "type": "control"
+            },
+            {
+              "from": "report.py.generate_report.return_7",
+              "to": "report.py.generate_report.exit_2",
+              "type": "return"
+            },
+            {
+              "from": "report.py.generate_report.if_8",
+              "to": "report.py.generate_report.expr_9",
+              "type": "control"
+            },
+            {
+              "from": "report.py.generate_report.expr_9",
+              "to": "report.py.generate_report.call_10",
+              "type": "control"
+            },
+            {
+              "from": "report.py.generate_report.if_8",
+              "to": "report.py.generate_report.call_10",
+              "type": "control",
+              "label": "true_branch"
+            },
+            {
+              "from": "report.py.generate_report.if_8",
+              "to": "report.py.generate_report.exit_2",
+              "type": "control",
+              "label": "false_branch"
+            },
+            {
+              "from": "report.py.generate_report.call_10",
+              "to": "report.py.generate_report.join_11",
+              "type": "control",
+              "label": "body_to_join"
+            },
+            {
+              "from": "report.py.generate_report.join_11",
+              "to": "report.py.generate_report.exit_2",
+              "type": "control"
+            }
+          ]
+        },
+        "<module>": {
+          "entry_node": "report.py.<module>.entry_1",
+          "exit_node": "report.py.<module>.exit_2",
+          "nodes": [
+            {
+              "id": "report.py.<module>.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "report.py.<module>.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "report.py.<module>.entry_1",
+              "to": "report.py.<module>.exit_2",
+              "type": "control"
+            }
+          ]
+        }
+      }
+    },
+    "/project/app/tests/test_math_ops.py": {
+      "functions": {
+        "test_compute_average_basic": {
+          "entry_node": "test_math_ops.py.test_compute_average_basic.entry_1",
+          "exit_node": "test_math_ops.py.test_compute_average_basic.exit_2",
+          "nodes": [
+            {
+              "id": "test_math_ops.py.test_compute_average_basic.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "test_math_ops.py.test_compute_average_basic.call_3",
+              "type": "CALL",
+              "text": "compute_average([1,2,3])",
+              "line": 6,
+              "indent": 0,
+              "metadata": {
+                "called_function": "compute_average"
+              }
+            },
+            {
+              "id": "test_math_ops.py.test_compute_average_basic.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "test_math_ops.py.test_compute_average_basic.entry_1",
+              "to": "test_math_ops.py.test_compute_average_basic.call_3",
+              "type": "control"
+            },
+            {
+              "from": "test_math_ops.py.test_compute_average_basic.call_3",
+              "to": "test_math_ops.py.test_compute_average_basic.exit_2",
+              "type": "control"
+            }
+          ]
+        },
+        "test_compute_average_empty": {
+          "entry_node": "test_math_ops.py.test_compute_average_empty.entry_1",
+          "exit_node": "test_math_ops.py.test_compute_average_empty.exit_2",
+          "nodes": [
+            {
+              "id": "test_math_ops.py.test_compute_average_empty.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "test_math_ops.py.test_compute_average_empty.call_3",
+              "type": "CALL",
+              "text": "compute_average([])",
+              "line": 10,
+              "indent": 0,
+              "metadata": {
+                "called_function": "compute_average"
+              }
+            },
+            {
+              "id": "test_math_ops.py.test_compute_average_empty.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "test_math_ops.py.test_compute_average_empty.entry_1",
+              "to": "test_math_ops.py.test_compute_average_empty.call_3",
+              "type": "control"
+            },
+            {
+              "from": "test_math_ops.py.test_compute_average_empty.call_3",
+              "to": "test_math_ops.py.test_compute_average_empty.exit_2",
+              "type": "control"
+            }
+          ]
+        },
+        "test_factorial_zero": {
+          "entry_node": "test_math_ops.py.test_factorial_zero.entry_1",
+          "exit_node": "test_math_ops.py.test_factorial_zero.exit_2",
+          "nodes": [
+            {
+              "id": "test_math_ops.py.test_factorial_zero.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "test_math_ops.py.test_factorial_zero.call_3",
+              "type": "CALL",
+              "text": "compute_factorial(0)",
+              "line": 14,
+              "indent": 0,
+              "metadata": {
+                "called_function": "compute_factorial"
+              }
+            },
+            {
+              "id": "test_math_ops.py.test_factorial_zero.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "test_math_ops.py.test_factorial_zero.entry_1",
+              "to": "test_math_ops.py.test_factorial_zero.call_3",
+              "type": "control"
+            },
+            {
+              "from": "test_math_ops.py.test_factorial_zero.call_3",
+              "to": "test_math_ops.py.test_factorial_zero.exit_2",
+              "type": "control"
+            }
+          ]
+        },
+        "<module>": {
+          "entry_node": "test_math_ops.py.<module>.entry_1",
+          "exit_node": "test_math_ops.py.<module>.exit_2",
+          "nodes": [
+            {
+              "id": "test_math_ops.py.<module>.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "test_math_ops.py.<module>.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "test_math_ops.py.<module>.entry_1",
+              "to": "test_math_ops.py.<module>.exit_2",
+              "type": "control"
+            }
+          ]
+        }
+      }
+    },
+    "/project/app/tests/test_processor.py": {
+      "functions": {
+        "test_processor_flow": {
+          "entry_node": "test_processor.py.test_processor_flow.entry_1",
+          "exit_node": "test_processor.py.test_processor_flow.exit_2",
+          "nodes": [
+            {
+              "id": "test_processor.py.test_processor_flow.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "test_processor.py.test_processor_flow.assign_3",
+              "type": "ASSIGN",
+              "text": "p = NumberProcessor([1, 2, 3])",
+              "line": 4,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "test_processor.py.test_processor_flow.call_4",
+              "type": "CALL",
+              "text": "NumberProcessor([1, 2, 3])",
+              "line": 4,
+              "indent": 0,
+              "metadata": {
+                "called_function": "NumberProcessor"
+              }
+            },
+            {
+              "id": "test_processor.py.test_processor_flow.assign_5",
+              "type": "ASSIGN",
+              "text": "r = p.process()",
+              "line": 5,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "test_processor.py.test_processor_flow.call_6",
+              "type": "CALL",
+              "text": "p.process()",
+              "line": 5,
+              "indent": 0,
+              "metadata": {
+                "called_function": "p.process"
+              }
+            },
+            {
+              "id": "test_processor.py.test_processor_flow.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "test_processor.py.test_processor_flow.entry_1",
+              "to": "test_processor.py.test_processor_flow.assign_3",
+              "type": "control"
+            },
+            {
+              "from": "test_processor.py.test_processor_flow.assign_3",
+              "to": "test_processor.py.test_processor_flow.call_4",
+              "type": "control"
+            },
+            {
+              "from": "test_processor.py.test_processor_flow.call_4",
+              "to": "test_processor.py.test_processor_flow.assign_5",
+              "type": "control"
+            },
+            {
+              "from": "test_processor.py.test_processor_flow.assign_5",
+              "to": "test_processor.py.test_processor_flow.call_6",
+              "type": "control"
+            },
+            {
+              "from": "test_processor.py.test_processor_flow.call_6",
+              "to": "test_processor.py.test_processor_flow.exit_2",
+              "type": "control"
+            }
+          ]
+        },
+        "test_sort": {
+          "entry_node": "test_processor.py.test_sort.entry_1",
+          "exit_node": "test_processor.py.test_sort.exit_2",
+          "nodes": [
+            {
+              "id": "test_processor.py.test_sort.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "test_processor.py.test_sort.assign_3",
+              "type": "ASSIGN",
+              "text": "p = NumberProcessor([3,1,2])",
+              "line": 13,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "test_processor.py.test_sort.call_4",
+              "type": "CALL",
+              "text": "NumberProcessor([3,1,2])",
+              "line": 13,
+              "indent": 0,
+              "metadata": {
+                "called_function": "NumberProcessor"
+              }
+            },
+            {
+              "id": "test_processor.py.test_sort.call_5",
+              "type": "CALL",
+              "text": "p.unstable_sort()",
+              "line": 16,
+              "indent": 0,
+              "metadata": {
+                "called_function": "p.unstable_sort"
+              }
+            },
+            {
+              "id": "test_processor.py.test_sort.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "test_processor.py.test_sort.entry_1",
+              "to": "test_processor.py.test_sort.assign_3",
+              "type": "control"
+            },
+            {
+              "from": "test_processor.py.test_sort.assign_3",
+              "to": "test_processor.py.test_sort.call_4",
+              "type": "control"
+            },
+            {
+              "from": "test_processor.py.test_sort.call_4",
+              "to": "test_processor.py.test_sort.call_5",
+              "type": "control"
+            },
+            {
+              "from": "test_processor.py.test_sort.call_5",
+              "to": "test_processor.py.test_sort.exit_2",
+              "type": "control"
+            }
+          ]
+        },
+        "<module>": {
+          "entry_node": "test_processor.py.<module>.entry_1",
+          "exit_node": "test_processor.py.<module>.exit_2",
+          "nodes": [
+            {
+              "id": "test_processor.py.<module>.entry_1",
+              "type": "ENTRY",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            },
+            {
+              "id": "test_processor.py.<module>.exit_2",
+              "type": "EXIT",
+              "text": "",
+              "line": null,
+              "indent": 0,
+              "metadata": {}
+            }
+          ],
+          "edges": [
+            {
+              "from": "test_processor.py.<module>.entry_1",
+              "to": "test_processor.py.<module>.exit_2",
+              "type": "control"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "cross_references": [
+    {
+      "source_file": "/project/app/main.py",
+      "source_function": "main",
+      "source_node": "main.py.main.call_4",
+      "target_file": "/project/app/utils/data_loader.py",
+      "target_function": "load_numbers",
+      "target_node": "data_loader.py.load_numbers.entry_1",
+      "type": "call"
+    },
+    {
+      "source_file": "/project/app/main.py",
+      "source_function": "main",
+      "source_node": "main.py.main.call_6",
+      "target_file": null,
+      "target_function": "print",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/main.py",
+      "source_function": "main",
+      "source_node": "main.py.main.call_8",
+      "target_file": "/project/app/utils/math_ops.py",
+      "target_function": "compute_average",
+      "target_node": "math_ops.py.compute_average.entry_1",
+      "type": "call"
+    },
+    {
+      "source_file": "/project/app/main.py",
+      "source_function": "main",
+      "source_node": "main.py.main.call_10",
+      "target_file": null,
+      "target_function": "print",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/main.py",
+      "source_function": "main",
+      "source_node": "main.py.main.call_12",
+      "target_file": null,
+      "target_function": "print",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/main.py",
+      "source_function": "main",
+      "source_node": "main.py.main.call_13",
+      "target_file": "/project/app/utils/math_ops.py",
+      "target_function": "compute_factorial",
+      "target_node": "math_ops.py.compute_factorial.entry_1",
+      "type": "call"
+    },
+    {
+      "source_file": "/project/app/main.py",
+      "source_function": "main",
+      "source_node": "main.py.main.call_16",
+      "target_file": null,
+      "target_function": "print",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/main.py",
+      "source_function": "<module>",
+      "source_node": "main.py.<module>.call_5",
+      "target_file": "/project/app/main.py",
+      "target_function": "main",
+      "target_node": "main.py.main.entry_1",
+      "type": "call"
+    },
+    {
+      "source_file": "/project/app/utils/data_loader.py",
+      "source_function": "load_numbers",
+      "source_node": "data_loader.py.load_numbers.call_7",
+      "target_file": null,
+      "target_function": "numbers.append",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/utils/data_loader.py",
+      "source_function": "load_numbers",
+      "source_node": "data_loader.py.load_numbers.call_8",
+      "target_file": null,
+      "target_function": "int",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/utils/math_ops.py",
+      "source_function": "compute_average",
+      "source_node": "math_ops.py.compute_average.call_10",
+      "target_file": null,
+      "target_function": "len",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/utils/math_ops.py",
+      "source_function": "compute_factorial",
+      "source_node": "math_ops.py.compute_factorial.call_7",
+      "target_file": null,
+      "target_function": "Exception",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/utils/math_ops.py",
+      "source_function": "compute_factorial",
+      "source_node": "math_ops.py.compute_factorial.call_10",
+      "target_file": "/project/app/utils/math_ops.py",
+      "target_function": "compute_factorial",
+      "target_node": "math_ops.py.compute_factorial.entry_1",
+      "type": "call"
+    },
+    {
+      "source_file": "/project/app/services/processor.py",
+      "source_function": "NumberProcessor.process",
+      "source_node": "processor.py.NumberProcessor.process.call_4",
+      "target_file": "/project/app/utils/math_ops.py",
+      "target_function": "compute_average",
+      "target_node": "math_ops.py.compute_average.entry_1",
+      "type": "call"
+    },
+    {
+      "source_file": "/project/app/services/processor.py",
+      "source_function": "NumberProcessor.process",
+      "source_node": "processor.py.NumberProcessor.process.call_6",
+      "target_file": null,
+      "target_function": "range",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/services/processor.py",
+      "source_function": "NumberProcessor.process",
+      "source_node": "processor.py.NumberProcessor.process.call_7",
+      "target_file": null,
+      "target_function": "len",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/services/processor.py",
+      "source_function": "NumberProcessor.process",
+      "source_node": "processor.py.NumberProcessor.process.call_10",
+      "target_file": null,
+      "target_function": "print",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/services/processor.py",
+      "source_function": "NumberProcessor.process",
+      "source_node": "processor.py.NumberProcessor.process.call_12",
+      "target_file": null,
+      "target_function": "print",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/services/report.py",
+      "source_function": "generate_report",
+      "source_node": "report.py.generate_report.call_4",
+      "target_file": null,
+      "target_function": "NumberProcessor",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/services/report.py",
+      "source_function": "generate_report",
+      "source_node": "report.py.generate_report.call_6",
+      "target_file": null,
+      "target_function": "processor.process",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/services/report.py",
+      "source_function": "generate_report",
+      "source_node": "report.py.generate_report.call_10",
+      "target_file": null,
+      "target_function": "print",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/tests/test_math_ops.py",
+      "source_function": "test_compute_average_basic",
+      "source_node": "test_math_ops.py.test_compute_average_basic.call_3",
+      "target_file": "/project/app/utils/math_ops.py",
+      "target_function": "compute_average",
+      "target_node": "math_ops.py.compute_average.entry_1",
+      "type": "call"
+    },
+    {
+      "source_file": "/project/app/tests/test_math_ops.py",
+      "source_function": "test_compute_average_empty",
+      "source_node": "test_math_ops.py.test_compute_average_empty.call_3",
+      "target_file": "/project/app/utils/math_ops.py",
+      "target_function": "compute_average",
+      "target_node": "math_ops.py.compute_average.entry_1",
+      "type": "call"
+    },
+    {
+      "source_file": "/project/app/tests/test_math_ops.py",
+      "source_function": "test_factorial_zero",
+      "source_node": "test_math_ops.py.test_factorial_zero.call_3",
+      "target_file": "/project/app/utils/math_ops.py",
+      "target_function": "compute_factorial",
+      "target_node": "math_ops.py.compute_factorial.entry_1",
+      "type": "call"
+    },
+    {
+      "source_file": "/project/app/tests/test_processor.py",
+      "source_function": "test_processor_flow",
+      "source_node": "test_processor.py.test_processor_flow.call_4",
+      "target_file": null,
+      "target_function": "NumberProcessor",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/tests/test_processor.py",
+      "source_function": "test_processor_flow",
+      "source_node": "test_processor.py.test_processor_flow.call_6",
+      "target_file": null,
+      "target_function": "p.process",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/tests/test_processor.py",
+      "source_function": "test_sort",
+      "source_node": "test_processor.py.test_sort.call_4",
+      "target_file": null,
+      "target_function": "NumberProcessor",
+      "target_node": null,
+      "type": "call_unresolved"
+    },
+    {
+      "source_file": "/project/app/tests/test_processor.py",
+      "source_function": "test_sort",
+      "source_node": "test_processor.py.test_sort.call_5",
+      "target_file": null,
+      "target_function": "p.unstable_sort",
+      "target_node": null,
+      "type": "call_unresolved"
+    }
+  ]
+}
