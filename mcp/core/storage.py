@@ -1,44 +1,36 @@
 """
-Storage utilities for reading and writing JSON files.
+Storage utilities for saving code context as raw text files.
 """
-import json
 import os
-from typing import Any
+from datetime import datetime
 
-# Data directory path
-DATA_DIR = "data"
-PROJECT_CONTEXT_FILE = os.path.join(DATA_DIR, "project_context.json")
-CODE_CHUNKS_FILE = os.path.join(DATA_DIR, "code_chunks.json")
-CHANGES_HISTORY_FILE = os.path.join(DATA_DIR, "changes_history.json")
+# Contexts directory for storing code context files
+CONTEXTS_DIR = "contexts"
 
-# Ensure data directory exists
-os.makedirs(DATA_DIR, exist_ok=True)
+# Ensure contexts directory exists
+os.makedirs(CONTEXTS_DIR, exist_ok=True)
 
 
-def read_json_file(filepath: str, default: Any = None) -> Any:
-    """Read JSON file, return default if file doesn't exist."""
-    if default is None:
-        default = {}
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return default
-    return default
-
-
-def write_json_file(filepath: str, data: Any) -> None:
-    """Write data to JSON file."""
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
-def append_to_json_file(filepath: str, item: Any) -> None:
-    """Append item to a JSON list file."""
-    data = read_json_file(filepath, default=[])
-    if not isinstance(data, list):
-        data = []
-    data.append(item)
-    write_json_file(filepath, data)
+def save_code_context(text: str) -> str:
+    """
+    Save code context as a raw text file with timestamp.
+    
+    Args:
+        text: Raw text content containing code chunks, explanations, and relationships
+        
+    Returns:
+        Success message with filename
+    """
+    # Generate timestamped filename
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"code_context_{timestamp}.txt"
+    filepath = os.path.join(CONTEXTS_DIR, filename)
+    
+    # Write text to file
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(text)
+        return f"Code context saved successfully to {filename}"
+    except IOError as e:
+        return f"Error saving code context: {str(e)}"
 

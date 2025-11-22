@@ -8,10 +8,7 @@ import asyncio
 from typing import Dict, Optional
 from collections import deque
 from .mcp_tools import (
-    submit_code_changes,
-    get_project_context,
-    get_code_chunk_context,
-    get_mcp_documentation
+    submit_code_context
 )
 
 # Store active SSE connections and pending responses
@@ -25,78 +22,17 @@ def get_tools_list_schema() -> dict:
         "result": {
             "tools": [
                 {
-                    "name": "submit_code_changes_mcp",
-                    "description": "Submit code changes in diff or structured JSON format",
+                    "name": "submit_code_context_mcp",
+                    "description": "Submit code changes with context. Send a text message containing: 1. Code chunks showing what changed (before/after), 2. Explanation of what the code does, 3. How this code relates to other code chunks. Example format: [Code Chunk] Changed: for i in range(10) To: for var in list [Explanation] This code iterates... [Relationships] This code relates to process_data()...",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
-                            "format_type": {
+                            "text": {
                                 "type": "string",
-                                "description": "Format type: 'diff' or 'structured'",
-                                "default": "structured"
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": "Code change content (diff string or JSON string)"
-                            },
-                            "file_path": {
-                                "type": "string",
-                                "description": "File path (for structured format)"
-                            },
-                            "line_numbers": {
-                                "type": "object",
-                                "description": "JSON object with start/end line numbers",
-                                "properties": {
-                                    "start": {"type": "integer"},
-                                    "end": {"type": "integer"}
-                                }
-                            },
-                            "relationships": {
-                                "type": "object",
-                                "description": "JSON object with relationship data"
+                                "description": "Raw text containing code chunks, explanations, and relationships"
                             }
                         },
-                        "required": ["content"]
-                    }
-                },
-                {
-                    "name": "get_project_context_mcp",
-                    "description": "Returns project metadata and high-level summary",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
-                    }
-                },
-                {
-                    "name": "get_code_chunk_context_mcp",
-                    "description": "Returns debugging context for specific code chunks with full relational info",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "Path to the file"
-                            },
-                            "line_numbers": {
-                                "type": "object",
-                                "description": "JSON object with start/end line numbers",
-                                "properties": {
-                                    "start": {"type": "integer"},
-                                    "end": {"type": "integer"}
-                                }
-                            }
-                        },
-                        "required": ["file_path"]
-                    }
-                },
-                {
-                    "name": "get_mcp_documentation_mcp",
-                    "description": "Returns documentation explaining available endpoints and tools",
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": {},
-                        "required": []
+                        "required": ["text"]
                     }
                 }
             ]
@@ -197,47 +133,15 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
         tool_name = params.get("name", "")
         tool_args = params.get("arguments", {})
         
-        if tool_name == "submit_code_changes_mcp":
-            result = submit_code_changes(
-                format_type=tool_args.get("format_type", "structured"),
-                content=json.dumps(tool_args.get("content", "")) if isinstance(tool_args.get("content"), dict) else str(tool_args.get("content", "")),
-                file_path=tool_args.get("file_path"),
-                line_numbers=json.dumps(tool_args.get("line_numbers")) if tool_args.get("line_numbers") else None,
-                relationships=json.dumps(tool_args.get("relationships")) if tool_args.get("relationships") else None
-            )
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "content": [{"type": "text", "text": result}]
+        if tool_name == "submit_code_context_mcp":
+            text = tool_args.get("text", "")
+            if not text:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32602, "message": "Missing required parameter: text"}
                 }
-            }
-        
-        elif tool_name == "get_project_context_mcp":
-            result = get_project_context()
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "content": [{"type": "text", "text": result}]
-                }
-            }
-        
-        elif tool_name == "get_code_chunk_context_mcp":
-            result = get_code_chunk_context(
-                file_path=tool_args.get("file_path", ""),
-                line_numbers=json.dumps(tool_args.get("line_numbers")) if tool_args.get("line_numbers") else None
-            )
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "content": [{"type": "text", "text": result}]
-                }
-            }
-        
-        elif tool_name == "get_mcp_documentation_mcp":
-            result = get_mcp_documentation()
+            result = submit_code_context(text)
             return {
                 "jsonrpc": "2.0",
                 "id": request_id,
