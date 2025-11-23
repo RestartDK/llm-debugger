@@ -31,10 +31,11 @@ def send_progress_update(
         message: Human-readable progress message
         progress: Progress value between 0.0 and 1.0
     """
+    logger_instance = logging.getLogger(__name__)
+    
     if not connection_id or connection_id not in sse_connections:
         # No connection available, just log
-        logger = logging.getLogger(__name__)
-        logger.debug(f"Progress update (no connection): {stage} - {message} ({progress:.1%})")
+        logger_instance.debug(f"Progress update (no connection): {stage} - {message} ({progress:.1%})")
         return
     
     progress_message = {
@@ -48,6 +49,7 @@ def send_progress_update(
     }
     
     sse_connections[connection_id].append(progress_message)
+    logger_instance.info(f"Progress update queued for connection {connection_id}: {stage} - {message} ({progress:.1%})")
 
 
 def get_tools_list_schema() -> dict:
@@ -176,6 +178,11 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
     # Store connection_id in thread-local storage so tools can access it
     if connection_id:
         threading.current_thread().mcp_connection_id = connection_id
+        logger_instance = logging.getLogger(__name__)
+        logger_instance.info(f"Stored connection_id {connection_id} in thread-local storage for MCP request")
+    else:
+        logger_instance = logging.getLogger(__name__)
+        logger_instance.warning("No connection_id provided for MCP request - progress updates may not work")
     
     # Handle MCP tool call
     if method == "tools/call":

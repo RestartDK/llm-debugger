@@ -116,23 +116,32 @@ def submit_code_context_mcp(text: str) -> str:
     # so connection_id may be None in stdio mode
     connection_id = getattr(threading.current_thread(), 'mcp_connection_id', None)
     
+    if connection_id:
+        logger.info(f"MCP tool called with connection_id: {connection_id}")
+    else:
+        logger.warning("MCP tool called without connection_id - progress updates will only be logged")
+    
     # Create progress callback that sends SSE updates
     def progress_callback(stage: str, message: str, progress: float):
         send_progress_update(connection_id, stage, message, progress)
-        logger.info(f"Progress: {stage} - {message} ({progress:.1%})")
+        logger.info(f"Progress: {stage} - {message} ({progress:.1%}) [connection_id: {connection_id}]")
     
-    # Generate graph from context
+    # Generate graph from context - this will block until complete
+    # Progress updates will be sent via SSE during processing
     try:
+        logger.info(f"Starting graph generation from MCP tool call [connection_id: {connection_id}]")
         result = generate_code_graph_from_context(
             text,
             progress_callback=progress_callback
         )
+        logger.info(f"Graph generation complete: {result.get('status')}")
         
         # TODO: Add workflow orchestration functionality here
         # - Trigger UI updates
         # - Notify other services
         # - Handle graph processing pipeline
         
+        # Return final result - tool will not return until graph generation is complete
         return json.dumps(result)
     except Exception as e:
         error_msg = f"Error generating graph: {str(e)}"
