@@ -2,9 +2,33 @@ import type {
   ControlFlowResponse,
   DebuggerPayload,
   ExecuteTestCasesRequest,
+  CfgNodeData,
 } from './types';
+import type { Node, Edge } from '@xyflow/react';
 
 type Json = Record<string, unknown>;
+
+// API response format (what comes from backend)
+interface ApiNode {
+  id: string;
+  code_chunk: string;
+  explanation?: string;
+  relationships?: string;
+  filename?: string;
+  line_range?: string; // Format: "15-24" or "20-25"
+}
+
+interface ApiEdge {
+  id: string;
+  from_node: string;
+  to_node: string;
+  relationship_type?: string;
+}
+
+interface ApiControlFlowResponse {
+  nodes: ApiNode[];
+  edges: ApiEdge[];
+}
 
 class HttpError extends Error {
   status: number;
@@ -89,10 +113,72 @@ async function request<TResponse>(
   }
 }
 
+/**
+ * Transform API response format to React Flow format
+ */
+function transformApiResponseToReactFlow(
+  apiResponse: ApiControlFlowResponse,
+): ControlFlowResponse {
+  // Transform nodes from API format to React Flow format
+  const nodes: Node<CfgNodeData>[] = apiResponse.nodes.map((apiNode) => {
+    // Parse line_range (format: "15-24" or "20-25")
+    let lineStart: number | undefined;
+    let lineEnd: number | undefined;
+    if (apiNode.line_range) {
+      const parts = apiNode.line_range.split('-');
+      if (parts.length === 2) {
+        lineStart = parseInt(parts[0], 10);
+        lineEnd = parseInt(parts[1], 10);
+        if (isNaN(lineStart)) lineStart = undefined;
+        if (isNaN(lineEnd)) lineEnd = undefined;
+      }
+    }
+
+    // Extract block name from id (use id as blockName)
+    const blockName = apiNode.id;
+
+    const nodeData: CfgNodeData = {
+      blockId: apiNode.id,
+      blockName: blockName,
+      codeSnippet: apiNode.code_chunk,
+      status: 'pending', // Default status
+      file: apiNode.filename,
+      lineStart,
+      lineEnd,
+    };
+
+    return {
+      id: apiNode.id,
+      type: 'cfgNode', // React Flow node type
+      position: { x: 0, y: 0 }, // Temporary position, will be set by layout function
+      data: nodeData,
+    };
+  });
+
+  // Transform edges from API format to React Flow format
+  const edges: Edge[] = apiResponse.edges.map((apiEdge) => ({
+    id: apiEdge.id,
+    source: apiEdge.from_node,
+    target: apiEdge.to_node,
+    type: 'smoothstep', // React Flow edge type
+    animated: false,
+    label: apiEdge.relationship_type, // Optional: show relationship type on edge
+  }));
+
+  return { nodes, edges };
+}
+
 // Backend route: @app.get("/get_control_flow_diagram") from main.py
 // Full URL: https://coolify.scottbot.party/llm_debugger/get_control_flow_diagram
-export const fetchControlFlow = (): Promise<ControlFlowResponse> =>
-  request<ControlFlowResponse>('/get_control_flow_diagram');
+export const fetchControlFlow = async (): Promise<ControlFlowResponse> => {
+  const apiResponse = await request<ApiControlFlowResponse>(
+    '/get_control_flow_diagram',
+  );
+  console.log('[API] Raw API response:', apiResponse);
+  const transformed = transformApiResponseToReactFlow(apiResponse);
+  console.log('[API] Transformed response:', transformed);
+  return transformed;
+};
 
 export const executeTestCases = (
   body: ExecuteTestCasesRequest,
