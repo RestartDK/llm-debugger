@@ -35,7 +35,16 @@ export const CfgCanvas: React.FC<CfgCanvasProps> = ({
 }) => {
   // We manage nodes/edges locally for layout, but selection is driven by props + local click
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<CfgNodeData>>(initialNodes);
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+  // Allow props to reset layout when backend data changes.
+  React.useEffect(() => {
+    setNodes(initialNodes);
+  }, [initialNodes, setNodes]);
+
+  React.useEffect(() => {
+    setEdges(initialEdges);
+  }, [initialEdges, setEdges]);
   
   // Create node types with problems
   const nodeTypes = React.useMemo(() => createNodeTypes(problems), [problems]);

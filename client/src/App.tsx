@@ -1,7 +1,13 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { Edge, Node } from '@xyflow/react';
 import { LeftPanel } from './components/LeftPanel';
 import { CfgCanvas } from './components/CfgCanvas';
-import { mockSteps, mockProblems, initialNodes, initialEdges } from './lib/mockData';
+import { executeTestCases, fetchControlFlow } from './lib/api';
+import type {
+  CfgNodeData,
+  Problem,
+  RuntimeStep,
+} from './lib/types';
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -11,16 +17,119 @@ import type { ImperativePanelHandle } from 'react-resizable-panels';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 function App() {
-  // Debugger Data (Mocked for now, would come from API)
-  const [steps] = useState(mockSteps);
-  const [problems] = useState(mockProblems);
+  const [steps, setSteps] = useState<RuntimeStep[]>([]);
+  const [problems, setProblems] = useState<Problem[]>([]);
+  const [nodes, setNodes] = useState<Node<CfgNodeData>[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  
+  const [cfgLoading, setCfgLoading] = useState(true);
+  const [cfgError, setCfgError] = useState<string | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
   const leftPanelRef = useRef<ImperativePanelHandle>(null);
   
   // Selection State
-  const [activeStepId, setActiveStepId] = useState<string | null>('score-step-21'); // Start with a failure selected
-  const [activeNodeId, setActiveNodeId] = useState<string | null>('score-block-aggregate');
+  const [activeStepId, setActiveStepId] = useState<string | null>(null);
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeNodeId && nodes.every((node) => node.id !== activeNodeId)) {
+      setActiveNodeId(nodes[0]?.id ?? null);
+    }
+  }, [activeNodeId, nodes]);
+
+  useEffect(() => {
+    if (steps.length === 0) {
+      if (activeStepId !== null) {
+        setActiveStepId(null);
+      }
+      return;
+    }
+    if (activeStepId && steps.every((step) => step.id !== activeStepId)) {
+      setActiveStepId(steps[0].id);
+    }
+  }, [activeStepId, steps]);
+
+  const handleAnalysisSuccess = (payload: Awaited<ReturnType<typeof executeTestCases>>) => {
+    setSteps(payload.steps ?? []);
+    setProblems(payload.problems ?? []);
+    setNodes(payload.nodes ?? []);
+    setEdges(payload.edges ?? []);
+
+    if (payload.problems && payload.problems.length > 0) {
+      const firstProblem = payload.problems[0];
+      setActiveNodeId(firstProblem.blockId || null);
+      setActiveStepId(firstProblem.stepId || null);
+      return;
+    }
+
+    if (payload.steps && payload.steps.length > 0) {
+      const lastStep = payload.steps[payload.steps.length - 1];
+      setActiveNodeId(lastStep.blockId);
+      setActiveStepId(lastStep.id);
+      return;
+    }
+
+    if (payload.nodes && payload.nodes.length > 0) {
+      setActiveNodeId(payload.nodes[0].id);
+      setActiveStepId(null);
+    }
+  };
+
+  const runAnalysis = async () => {
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    try {
+      const payload = await executeTestCases({
+        task_description: 'Inspect control flow for dummy ecommerce pipeline',
+      });
+      handleAnalysisSuccess(payload);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unable to run analysis. Please try again.';
+      setAnalysisError(message);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadControlFlow = async () => {
+      setCfgLoading(true);
+      setCfgError(null);
+      try {
+        const diagram = await fetchControlFlow();
+        if (cancelled) return;
+        setNodes(diagram.nodes);
+        setEdges(diagram.edges);
+        if (diagram.nodes.length > 0) {
+          setActiveNodeId(diagram.nodes[0].id);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Unable to load control-flow diagram.';
+        setCfgError(message);
+      } finally {
+        if (!cancelled) {
+          setCfgLoading(false);
+        }
+      }
+    };
+
+    void loadControlFlow();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Sync Node selection when Step is selected
   const handleStepSelect = (stepId: string) => {
@@ -101,14 +210,42 @@ function App() {
             >
               {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
             </div>
+            <div className="absolute right-4 top-4 z-50 flex gap-2">
+              <button
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-70"
+                onClick={runAnalysis}
+                disabled={cfgLoading || analysisLoading}
+              >
+                {analysisLoading ? 'Running analysis…' : 'Run analysis'}
+              </button>
+            </div>
 
-            <CfgCanvas
-              initialNodes={initialNodes}
-              initialEdges={initialEdges}
-              activeNodeId={activeNodeId}
-              onNodeClick={handleNodeClick}
-              problems={problems}
-            />
+            {cfgError && (
+              <div className="h-full w-full flex items-center justify-center">
+                <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {cfgError}
+                </div>
+              </div>
+            )}
+            {!cfgError && nodes.length === 0 && (
+              <div className="h-full w-full flex items-center justify-center text-sm text-muted-foreground">
+                {cfgLoading ? 'Loading control-flow diagram…' : 'No diagram available.'}
+              </div>
+            )}
+            {!cfgError && nodes.length > 0 && (
+              <CfgCanvas
+                initialNodes={nodes}
+                initialEdges={edges}
+                activeNodeId={activeNodeId}
+                onNodeClick={handleNodeClick}
+                problems={problems}
+              />
+            )}
+            {analysisError && (
+              <div className="absolute right-4 bottom-4 bg-destructive/10 border border-destructive/40 text-destructive text-xs px-3 py-2 rounded-md shadow-sm">
+                {analysisError}
+              </div>
+            )}
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
