@@ -268,20 +268,23 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
                 # Try multiple ways to get tools
                 tool_dict = {}
                 
-                # Method 1: Check for _tool_manager.tools
+                # Method 1: Check for _tool_manager._tools (private attribute)
                 if hasattr(mcp_instance, '_tool_manager'):
                     tool_manager = mcp_instance._tool_manager
                     logger_instance.info(f"Found _tool_manager: {type(tool_manager)}")
-                    if hasattr(tool_manager, 'tools'):
+                    if hasattr(tool_manager, '_tools'):
+                        tool_dict = tool_manager._tools  # Use _tools instead of tools
+                        logger_instance.info(f"Found tools in _tool_manager._tools: {len(tool_dict)} tools")
+                    elif hasattr(tool_manager, 'tools'):
                         tool_dict = tool_manager.tools
                         logger_instance.info(f"Found tools in _tool_manager.tools: {len(tool_dict)} tools")
                     else:
-                        logger_instance.warning(f"_tool_manager exists but has no 'tools' attribute. Available: {[a for a in dir(tool_manager) if not a.startswith('__')]}")
+                        logger_instance.warning(f"_tool_manager exists but has no 'tools' or '_tools' attribute. Available: {[a for a in dir(tool_manager) if not a.startswith('__')]}")
                 
-                # Method 2: Try get_tools() method
+                # Method 2: Try get_tools() method (async)
                 if not tool_dict and hasattr(mcp_instance, 'get_tools'):
                     try:
-                        tool_dict = mcp_instance.get_tools()
+                        tool_dict = await mcp_instance.get_tools()  # Add await
                         logger_instance.info(f"Found tools via get_tools(): {len(tool_dict) if isinstance(tool_dict, dict) else 'not a dict'}")
                     except Exception as e:
                         logger_instance.warning(f"get_tools() failed: {e}")
