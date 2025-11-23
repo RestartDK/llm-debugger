@@ -304,11 +304,6 @@ async def execute_test_cases_endpoint(request: Request):
             final_analysis = result.get("final_analysis", "")
             task_description = data.get("task_description", "Test execution results")
             
-            # Build instruction content with lessons learned
-            instruction_content = f"""[Task Description]
-{task_description}
-
-[Lessons Learned]
             # Only get relevant keys: analysis, attempts, final_analysis, and dump them as strings
             analysis_str = str(result.get("analysis"))
             attempts_str = str(result.get("attempts"))
@@ -335,14 +330,14 @@ async def execute_test_cases_endpoint(request: Request):
                 f.write(instruction_content)
 
             logger.info(f"POST /execute_test_cases - Saved instructions to {filepath}")
-            return {
-                "analysis": analysis_str,
-                "attempts": attempts_str,
-                "final_analysis": final_analysis_str,
-            }
         except Exception as e:
             logger.error(f"POST /execute_test_cases - Failed to save instructions: {str(e)}")
-            return {"error": str(e)}
+        
+        # Return the result regardless of whether instruction saving succeeded
+        return result
+    except Exception as e:
+        logger.error(f"POST /execute_test_cases - Error: {str(e)}")
+        return {"error": str(e)}
 
 
 @app.post("/send_debugger_response")
