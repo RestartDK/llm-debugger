@@ -114,7 +114,22 @@ function App() {
     setAttempts(payload.attempts);
     setFinalAnalysis(payload.final_analysis);
 
-    setNodes((prev) => mergeNodesWithAnalysis(prev, payload.nodes));
+    setNodes((prev) => {
+      const merged = mergeNodesWithAnalysis(prev, payload.nodes);
+      // Change all pending statuses to succeeded after analysis completes
+      return merged.map((node) => {
+        if (node.data.status === 'pending') {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              status: 'succeeded' as const,
+            },
+          };
+        }
+        return node;
+      });
+    });
 
     if (payload.edges && payload.edges.length > 0) {
       setEdges(payload.edges);
