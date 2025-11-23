@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import traceback
 from typing import Dict, List, Optional, Sequence
 
 from pydantic import BaseModel, Field
@@ -183,5 +185,17 @@ def analyze_failed_test(
         runtime_states=runtime_states,
         failed_test=failed_test,
     )
-    run_result = agent.run_sync(prompt, output_type=DebugAnalysis)
-    return run_result.output
+    try:
+        run_result = agent.run_sync(prompt, output_type=DebugAnalysis)
+        return run_result.output
+    except Exception as e:
+        error_type = type(e).__name__
+        error_msg = str(e)
+        test_name = failed_test.name or "unnamed"
+        print(f"[groq_error] Function: analyze_failed_test, Test: {test_name}, Error Type: {error_type}, Message: {error_msg}", file=sys.stderr)
+        if hasattr(e, 'status_code'):
+            print(f"[groq_error] HTTP Status: {e.status_code}", file=sys.stderr)
+        if hasattr(e, 'response'):
+            print(f"[groq_error] Response: {e.response}", file=sys.stderr)
+        print(f"[groq_error] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
+        raise  # Re-raise after logging

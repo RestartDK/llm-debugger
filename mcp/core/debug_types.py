@@ -62,6 +62,27 @@ class ExecutionAttempt:
         return asdict(self)
 
 
+@dataclass
+class TestExecutionResult:
+    """
+    Record of test execution result with status tracking.
+    """
+    test_name: str
+    status: str  # 'passed' or 'failed'
+    result: Any  # LlmDebugRunResult (using Any to avoid circular import)
+
+    def is_passed(self) -> bool:
+        """Helper method to check if test passed."""
+        return self.status == "passed"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "test_name": self.test_name,
+            "status": self.status,
+            "result": self.result.to_dict() if hasattr(self.result, "to_dict") else str(self.result),
+        }
+
+
 def serialize_value(value: Any, *, depth: int = 0) -> Any:
     """
     Convert arbitrary Python objects into JSON-safe, size-bounded structures.

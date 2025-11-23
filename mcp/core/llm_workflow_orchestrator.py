@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
 import sys
+import traceback
+from datetime import datetime
 from dataclasses import dataclass
 from textwrap import dedent
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .agent import LlmDebugAgent
 from .debug_analysis_llm import (
@@ -12,7 +15,7 @@ from .debug_analysis_llm import (
     FailedTest,
     RuntimeStateSnapshot,
 )
-from .debug_types import BasicBlock, ExecutionAttempt
+from .debug_types import BasicBlock, ExecutionAttempt, TestExecutionResult
 from .dummy_cfg import get_dummy_blocks, get_dummy_sources
 from .mcp_tools import build_runner_payload, run_with_block_tracing_subprocess
 from .source_enhancement_llm import EnhancedSource
@@ -20,6 +23,7 @@ from .test_generation_llm import GeneratedTestCase, GeneratedTestSuite
 from textwrap import dedent as _dedent
 import asyncio
 from . import mcp_routes
+from pydantic_ai import Agent
 
 
 def render_generated_test_case_to_python(
@@ -260,6 +264,7 @@ def run_generated_test_through_tracer_and_analyze(
     sources: Sequence[Dict[str, str]] | None = None,
     blocks: Sequence[BasicBlock] | None = None,
     test_index: int = 0,
+    execute_all_tests: bool = False,
 ) -> LlmDebugRunResult:
     """
     End-to-end pipeline:
@@ -268,7 +273,38 @@ def run_generated_test_through_tracer_and_analyze(
     3. Run the test through the CFG tracer subprocess.
     4. Convert the trace into BlockInfo + RuntimeStateSnapshots.
     5. Ask the LLM to diagnose which blocks misbehaved.
+    
+    If execute_all_tests=True, executes all tests and generates instruction file.
     """
+    
+    if execute_all_tests:
+        print("[orchestrator] execute_all_tests=True, executing all tests...", file=sys.stderr)
+        test_results = run_all_tests_through_tracer_and_analyze(
+            agent=agent,
+            task_description=task_description,
+            sources=sources,
+            blocks=blocks,
+        )
+        
+        # Generate instruction file
+        original_sources = list(sources) if sources is not None else get_dummy_sources()
+        instruction_filepath = generate_instruction_file_from_test_results(
+            agent=agent,
+            test_results=test_results,
+            original_sources=original_sources,
+            task_description=task_description,
+        )
+        print(f"[orchestrator] Instruction file generated: {instruction_filepath}", file=sys.stderr)
+        
+        # Return first result for backward compatibility
+        return test_results[0] if test_results else run_generated_test_through_tracer_and_analyze(
+            agent=agent,
+            task_description=task_description,
+            sources=sources,
+            blocks=blocks,
+            test_index=0,
+            execute_all_tests=False,
+        )
 
     source_entries = list(sources) if sources is not None else None
     if source_entries is None:
@@ -409,7 +445,32 @@ def run_generated_test_through_tracer_and_analyze(
         attempts_history.append(attempt)
         
         if is_success:
+            # Generate success reasoning
+            fixes_applied = []
+            if attempt_count == 1:
+                # First attempt - use initial enhancement reasoning
+                if enhanced_sources_list:
+                    for enhanced in enhanced_sources_list:
+                        if enhanced.added_imports:
+                            fixes_applied.append(f"Added imports/stubs: {', '.join(enhanced.added_imports)}")
+                        if enhanced.reasoning and enhanced.reasoning != initial_reasoning:
+                            fixes_applied.append(enhanced.reasoning)
+            else:
+                # Subsequent attempts - use fix reasoning from previous attempts
+                if initial_reasoning and initial_reasoning != "Initial enhancement to add missing imports and stubs.":
+                    fixes_applied.append(initial_reasoning)
+            
+            if not fixes_applied:
+                fixes_applied = ["Code executed successfully without errors"]
+            
+            success_reasoning = f"Test passed successfully. Key fixes applied: {'; '.join(fixes_applied)}. The code now correctly handles the test scenario."
+            
+            # Update the attempt with success reasoning
+            attempt.reasoning = success_reasoning
+            attempts_history[-1] = attempt  # Update the last attempt
+            
             print(f"[orchestrator] Attempt {attempt_count} succeeded!", file=sys.stderr)
+            print(f"[orchestrator] Success reasoning: {success_reasoning}", file=sys.stderr)
             break
             
         # If we failed and have retries left, try to fix
@@ -582,6 +643,361 @@ def run_generated_test_through_tracer_and_analyze(
         runtime_states=runtime_states,
         attempts=attempts_history,
     )
+
+
+def run_all_tests_through_tracer_and_analyze(
+    *,
+    agent: LlmDebugAgent,
+    task_description: str,
+    sources: Sequence[Dict[str, str]] | None = None,
+    blocks: Sequence[BasicBlock] | None = None,
+) -> List[LlmDebugRunResult]:
+    """
+    Execute all tests in the generated test suite and collect results.
+    
+    Args:
+        agent: LlmDebugAgent for LLM calls
+        task_description: Human-readable task description
+        sources: Optional list of source files
+        blocks: Optional list of BasicBlock objects
+        
+    Returns:
+        List of LlmDebugRunResult objects, one per test
+    """
+    print("[orchestrator] Executing all tests in suite...", file=sys.stderr)
+    
+    source_entries = list(sources) if sources is not None else None
+    if source_entries is None:
+        print("[orchestrator] WARNING: sources is None, falling back to DUMMY sources", file=sys.stderr)
+        source_entries = get_dummy_sources()
+    
+    if not source_entries:
+        raise ValueError("No source files provided for test generation.")
+    
+    code_snippet = source_entries[0]["code"]
+    suite = agent.generate_tests_for_code(code_snippet=code_snippet)
+    
+    if not suite.tests:
+        raise ValueError("LLM did not return any generated tests.")
+    
+    print(f"[orchestrator] Generated {len(suite.tests)} tests, executing all...", file=sys.stderr)
+    
+    results: List[LlmDebugRunResult] = []
+    for test_idx in range(len(suite.tests)):
+        print(f"[orchestrator] Executing test {test_idx + 1}/{len(suite.tests)}: {suite.tests[test_idx].name}", file=sys.stderr)
+        try:
+            result = run_generated_test_through_tracer_and_analyze(
+                agent=agent,
+                task_description=task_description,
+                sources=sources,
+                blocks=blocks,
+                test_index=test_idx,
+            )
+            results.append(result)
+        except Exception as e:
+            print(f"[orchestrator] Error executing test {test_idx}: {e}", file=sys.stderr)
+            # Create a failed result for this test
+            failed_test = FailedTest(
+                name=suite.tests[test_idx].name,
+                input=suite.tests[test_idx].input,
+                expected=suite.tests[test_idx].expected_output,
+                actual=f"Test execution failed: {str(e)}",
+                notes=traceback.format_exc(),
+            )
+            debug_analysis = DebugAnalysis(
+                task_description=f"Test '{suite.tests[test_idx].name}' failed to execute.",
+                failed_test=failed_test,
+                assessments=[],
+            )
+            results.append(
+                LlmDebugRunResult(
+                    suite=suite,
+                    test_case=suite.tests[test_idx],
+                    trace_payload={"ok": False, "error": {"message": str(e)}},
+                    debug_analysis=debug_analysis,
+                    blocks=[],
+                    runtime_states=[],
+                    attempts=[],
+                )
+            )
+    
+    print(f"[orchestrator] Completed execution of {len(results)} tests", file=sys.stderr)
+    return results
+
+
+def build_fix_instruction_prompt(
+    passed_tests: List[LlmDebugRunResult],
+    failed_tests: List[LlmDebugRunResult],
+    original_sources: List[Dict[str, str]],
+    task_description: str,
+) -> str:
+    """
+    Build a prompt for generating detailed fix instructions.
+    """
+    # Format original code chunks
+    code_chunks_section = []
+    for src in original_sources:
+        file_path = src.get("file_path", "unknown.py")
+        code = src.get("code", "")
+        # Try to extract line numbers from code if available
+        code_chunks_section.append(f"[Code Chunk]\nFile: {file_path}\n```python\n{code}\n```\n")
+    
+    # Format passed tests
+    passed_tests_section = []
+    for result in passed_tests:
+        test_case = result.test_case
+        success_reasoning = ""
+        if result.attempts:
+            last_attempt = result.attempts[-1]
+            if last_attempt.status == "success" and last_attempt.reasoning:
+                success_reasoning = f"\nSuccess Reasoning: {last_attempt.reasoning}"
+        passed_tests_section.append(
+            f"Test: {test_case.name}\n"
+            f"Input: {test_case.input}\n"
+            f"Expected: {test_case.expected_output}\n"
+            f"Status: PASSED{success_reasoning}\n"
+        )
+    
+    # Format failed tests
+    failed_tests_section = []
+    for result in failed_tests:
+        test_case = result.test_case
+        failed_test = result.debug_analysis.failed_test
+        failed_tests_section.append(
+            f"Test: {test_case.name}\n"
+            f"Input: {test_case.input}\n"
+            f"Expected: {test_case.expected_output}\n"
+            f"Actual: {failed_test.actual}\n"
+            f"Error: {failed_test.notes or 'N/A'}\n"
+            f"Status: FAILED\n"
+        )
+    
+    # Format execution history
+    execution_history = []
+    for result in failed_tests:
+        if result.attempts:
+            for attempt in result.attempts:
+                execution_history.append(f"Attempt {attempt.attempt_number}: {attempt.reasoning or attempt.error_summary or 'N/A'}")
+    
+    prompt = f"""
+You are analyzing test results to generate detailed fix instructions for debugging code.
+
+[Task Description]
+{task_description}
+
+[Original Code Context]
+{chr(10).join(code_chunks_section)}
+
+[Intent]
+The code is intended to: {task_description}
+
+[Passed Tests - Examples of Working Behavior]
+{chr(10).join(passed_tests_section) if passed_tests_section else "No tests passed."}
+
+[Failed Tests - Issues to Fix]
+{chr(10).join(failed_tests_section) if failed_tests_section else "No tests failed."}
+
+[Execution History]
+{chr(10).join(execution_history) if execution_history else "No execution history available."}
+
+Your task: Generate detailed fix instructions that explain:
+1. WHAT TO DO: Specific code changes needed to fix the failing tests
+2. WHERE TO DO IT: File paths and line numbers for each change
+3. WHAT NOT TO DO: Things to avoid, patterns that don't work (based on execution history)
+4. Reasoning: Why these fixes are needed based on test results
+
+CRITICAL: 
+- Preserve behavior that makes passed tests work
+- Fix issues that cause failed tests
+- Avoid repeating fixes that were already tried (see execution history)
+- Provide clear before/after code snippets for each fix
+
+Format your response as structured text following this format:
+
+[Fix Instructions]
+WHAT TO DO:
+- <specific change 1>
+- <specific change 2>
+
+WHERE TO DO IT:
+- File: <file_path>, Lines: <start>-<end>
+- File: <file_path>, Lines: <start>-<end>
+
+WHAT NOT TO DO:
+- <anti-pattern 1>
+- <anti-pattern 2>
+
+[Code Changes]
+File: <file_path>
+Lines: <start>-<end>
+
+Changed:
+<old code>
+
+To:
+<new code>
+
+[Reasoning]
+<why this change fixes the failing tests while preserving passed tests>
+"""
+    return dedent(prompt).strip()
+
+
+def generate_fix_instructions(
+    *,
+    agent: Agent,
+    passed_tests: List[LlmDebugRunResult],
+    failed_tests: List[LlmDebugRunResult],
+    original_sources: List[Dict[str, str]],
+    task_description: str,
+) -> str:
+    """
+    Generate fix instructions using LLM.
+    """
+    prompt = build_fix_instruction_prompt(
+        passed_tests=passed_tests,
+        failed_tests=failed_tests,
+        original_sources=original_sources,
+        task_description=task_description,
+    )
+    try:
+        run_result = agent.run_sync(prompt)  # Text output, not structured
+        instructions = run_result.output
+        print(f"[orchestrator] Generated fix instructions ({len(instructions)} chars)", file=sys.stderr)
+        return instructions
+    except Exception as e:
+        error_type = type(e).__name__
+        error_msg = str(e)
+        print(f"[groq_error] Function: generate_fix_instructions, Error Type: {error_type}, Message: {error_msg}", file=sys.stderr)
+        if hasattr(e, 'status_code'):
+            print(f"[groq_error] HTTP Status: {e.status_code}", file=sys.stderr)
+        if hasattr(e, 'response'):
+            print(f"[groq_error] Response: {e.response}", file=sys.stderr)
+        print(f"[groq_error] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
+        # Return fallback instructions
+        return f"[Fix Instructions]\nError generating instructions: {error_msg}\n\nPlease review the test results manually."
+
+
+def generate_instruction_file_from_test_results(
+    *,
+    agent: LlmDebugAgent,
+    test_results: List[LlmDebugRunResult],
+    original_sources: Sequence[Dict[str, str]],
+    task_description: str,
+    output_dir: str = "instructions",
+) -> str:
+    """
+    Generate instruction file from test results.
+    
+    Args:
+        agent: LlmDebugAgent for LLM calls
+        test_results: List of test execution results
+        original_sources: Original source files (before enhancement)
+        task_description: Task description
+        output_dir: Directory to save instruction file
+        
+    Returns:
+        Filepath of generated instruction file
+    """
+    print(f"[orchestrator] Generating instruction file from {len(test_results)} test results...", file=sys.stderr)
+    
+    # Separate passed vs failed tests
+    passed_tests: List[LlmDebugRunResult] = []
+    failed_tests: List[LlmDebugRunResult] = []
+    
+    for result in test_results:
+        trace_payload = result.trace_payload
+        error_info = trace_payload.get("error")
+        source_loading_errors = trace_payload.get("source_loading_errors", [])
+        
+        is_passed = trace_payload.get("ok", False) and not source_loading_errors and not error_info
+        if is_passed:
+            passed_tests.append(result)
+        else:
+            failed_tests.append(result)
+    
+    print(f"[orchestrator] Separated tests: {len(passed_tests)} passed, {len(failed_tests)} failed", file=sys.stderr)
+    
+    # Generate fix instructions using LLM
+    original_sources_list = list(original_sources)
+    instructions_text = generate_fix_instructions(
+        agent=agent.agent,
+        passed_tests=passed_tests,
+        failed_tests=failed_tests,
+        original_sources=original_sources_list,
+        task_description=task_description,
+    )
+    
+    # Build instruction content following send_debugger_response pattern
+    # Get task description in the same format as send_debugger_response
+    task_description_section = f"""
+Apply suggested fixes to the codebase.
+A separate debugging pipeline has already identified:
+
+Which test cases failed
+The root cause analysis
+Exact file names and line numbers involved
+Proposed minimal fixes
+Relevant diffs, stack traces, and context
+Your job is to apply only the changes required to fix the issues, following these rules:
+
+1. Editing Rules
+
+Modify only files explicitly listed in the input.
+For each file, apply the changes inside the input.
+If a patch is ambiguous, ask for clarification instead of guessing.
+Do not rewrite entire files unless the patch requires it.
+Preserve formatting, imports, comments, and style of the existing codebase.
+Never introduce new dependencies unless the patch explicitly instructs it.
+
+2. Consistency Rules
+
+Ensure all changes type-check and satisfy the project's conventions.
+Ensure each fix is coherent with the runtime trace and failing test behavior.
+If a patch interacts with a function called across multiple files, verify cross-file compatibility.
+If removing or refactoring code, ensure references and calls remain valid.
+
+3. Safety Rules
+
+Do not create new files unless explicitly instructed.
+Do not delete or rename files unless explicitly instructed.
+Avoid speculative changes; stay strictly within the proposed patches.
+If you need more context from a file, request it before editing.
+"""
+    
+    # Build the full instruction content (matching send_debugger_response pattern: task_description + '\n' + instructions)
+    instruction_file_content = task_description_section + '\n' + f"""[Original Code Context]
+{chr(10).join(f"File: {src.get('file_path', 'unknown.py')}\n```python\n{src.get('code', '')}\n```" for src in original_sources_list)}
+
+[Intent]
+{task_description}
+
+[Passed Tests - Examples of Working Behavior]
+{chr(10).join(f"Test: {result.test_case.name}\nInput: {result.test_case.input}\nExpected: {result.test_case.expected_output}\nStatus: PASSED\nSuccess Reasoning: {result.attempts[-1].reasoning if result.attempts and result.attempts[-1].reasoning else 'N/A'}\n" for result in passed_tests) if passed_tests else "No tests passed."}
+
+[Failed Tests - Issues to Fix]
+{chr(10).join(f"Test: {result.test_case.name}\nInput: {result.test_case.input}\nExpected: {result.test_case.expected_output}\nActual: {result.debug_analysis.failed_test.actual}\nError: {result.debug_analysis.failed_test.notes or 'N/A'}\nStatus: FAILED\n" for result in failed_tests) if failed_tests else "No tests failed."}
+
+[Execution History]
+{chr(10).join(f"Attempt {attempt.attempt_number}: {attempt.reasoning or attempt.error_summary or 'N/A'}" for result in failed_tests for attempt in result.attempts) if failed_tests else "No execution history."}
+
+{instructions_text}
+"""
+    
+    # Ensure output directory exists (same as send_debugger_response)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Generate filename with timestamp (same format as send_debugger_response: YYYY-MM-DD_HH-MM.txt)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    filename = f"{timestamp}.txt"
+    filepath = os.path.join(output_dir, filename)
+    
+    # Write instruction file (same pattern as send_debugger_response)
+    with open(filepath, 'w') as f:
+        f.write(instruction_file_content)
+    
+    print(f"[orchestrator] Instruction file saved to: {filepath}", file=sys.stderr)
+    return filepath
 
 
 def build_static_cfg_from_blocks(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import sys
+import traceback
 from textwrap import dedent
 from typing import List, Optional
 
@@ -130,13 +131,24 @@ def generate_test_code_only(
     Returns raw Python test code string.
     """
     prompt = build_test_code_prompt(code_snippet, context)
-    run_result = agent.run_sync(prompt)  # No output_type - just text generation
-    test_code = run_result.output
-    
-    # Log the generated test code
-    print(f"[test_gen] Step 1 - Generated test code:\n{test_code}", file=sys.stderr)
-    
-    return test_code
+    try:
+        run_result = agent.run_sync(prompt)  # No output_type - just text generation
+        test_code = run_result.output
+        
+        # Log the generated test code
+        print(f"[test_gen] Step 1 - Generated test code:\n{test_code}", file=sys.stderr)
+        
+        return test_code
+    except Exception as e:
+        error_type = type(e).__name__
+        error_msg = str(e)
+        print(f"[groq_error] Function: generate_test_code_only, Error Type: {error_type}, Message: {error_msg}", file=sys.stderr)
+        if hasattr(e, 'status_code'):
+            print(f"[groq_error] HTTP Status: {e.status_code}", file=sys.stderr)
+        if hasattr(e, 'response'):
+            print(f"[groq_error] Response: {e.response}", file=sys.stderr)
+        print(f"[groq_error] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
+        raise  # Re-raise after logging
 
 
 def build_metadata_extraction_prompt(
@@ -222,13 +234,24 @@ def extract_test_metadata(
     prompt = build_metadata_extraction_prompt(
         generated_test_code, original_code_snippet, target_function
     )
-    run_result = agent.run_sync(prompt, output_type=GeneratedTestSuite)
-    suite = run_result.output
-    
-    # Log the extracted metadata
-    print(f"[test_gen] Step 2 - Extracted metadata:\n{suite.model_dump_json(indent=2)}", file=sys.stderr)
-    
-    return suite
+    try:
+        run_result = agent.run_sync(prompt, output_type=GeneratedTestSuite)
+        suite = run_result.output
+        
+        # Log the extracted metadata
+        print(f"[test_gen] Step 2 - Extracted metadata:\n{suite.model_dump_json(indent=2)}", file=sys.stderr)
+        
+        return suite
+    except Exception as e:
+        error_type = type(e).__name__
+        error_msg = str(e)
+        print(f"[groq_error] Function: extract_test_metadata, Error Type: {error_type}, Message: {error_msg}", file=sys.stderr)
+        if hasattr(e, 'status_code'):
+            print(f"[groq_error] HTTP Status: {e.status_code}", file=sys.stderr)
+        if hasattr(e, 'response'):
+            print(f"[groq_error] Response: {e.response}", file=sys.stderr)
+        print(f"[groq_error] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
+        raise  # Re-raise after logging
 
 
 def build_test_gen_prompt(code_snippet: str, context: Optional[str] = None) -> str:

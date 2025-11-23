@@ -36,6 +36,7 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
             - task_description: human readable text for the debugging run.
             - sources: optional list of {"file_path", "code"} dicts.
             - blocks: optional list of {"block_id", "file_path", "start_line", "end_line"} dicts.
+            - execute_all_tests: optional bool to execute all tests and generate instruction file (default: False).
     """
     print("[test_cases] ===== Starting test case execution workflow =====", file=sys.stderr)
     print(
@@ -81,6 +82,9 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
         print("[test_cases] No blocks provided, using dummy blocks", file=sys.stderr)
         blocks = get_dummy_blocks()
 
+    execute_all_tests = data.get("execute_all_tests", False)
+    print(f"[test_cases] execute_all_tests={execute_all_tests}", file=sys.stderr)
+    
     print("[test_cases] Initializing LlmDebugAgent...", file=sys.stderr)
     agent = LlmDebugAgent()
     print("[test_cases] Calling run_generated_test_through_tracer_and_analyze...", file=sys.stderr)
@@ -89,6 +93,7 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
         task_description=task_description,
         sources=sources,
         blocks=blocks,
+        execute_all_tests=execute_all_tests,
     )
     print("[test_cases] Building debugger UI payload...", file=sys.stderr)
     payload: DebuggerPayload = build_debugger_ui_payload(run_result)  # type: ignore[assignment]
