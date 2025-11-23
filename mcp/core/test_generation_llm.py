@@ -60,8 +60,9 @@ Goals:
 2. Cover normal flow plus edge cases (empty inputs, error paths, boundary values).
 3. Produce deterministic tests with explicit assertions.
 4. Each test case MUST invoke the target function explicitly, assign the call to a variable named `result` (e.g., `result = my_func(...)`), and assert on `result` (or its fields) right after.
-5. Code chunks must be STANDALONE EXECUTABLE. You may add mock classes/functions or remove blocking external calls if needed. Add a 3-5 word comment (e.g., "# Mocking external API call") where you modify or mock things.
-6. Return data that strictly matches the JSON schema:
+5. Tests must be STANDALONE. Mock ALL external dependencies (imports, globals, classes) in the test input itself. Do NOT assume any imports exist unless standard library.
+6. Create MULTIPLE GRANULAR tests covering specific functionality.
+7. Return data that strictly matches the JSON schema:
    {{
      "target_function": "...",
      "summary": "...",
@@ -80,8 +81,10 @@ Goals:
 Rules:
 - Prefer pytest-style parametrization when it reduces duplication.
 - Avoid pseudo-code, return concrete Python snippets where relevant.
-- Do not reference variables that were never defined (e.g., always define `result` before using it).
+- Do not reference variables that were never defined.
 - If multiple helper functions are present, clarify which one each test targets.
+- Use `unittest.mock` or create stub classes/functions for any missing dependencies.
+- "Bring your own mocks": If the code uses `requests.get`, mock it. If it uses `MyClass`, define a stub `MyClass` in the input code.
 """
     return dedent(prompt).strip()
 

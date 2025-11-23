@@ -82,6 +82,7 @@ Guidelines:
 - For module-level constants, infer reasonable values based on usage
 - You can remove logic that blocks execution (like network calls) and replace with mocks, adding a comment.
 - Keep stubs minimal - they just need to allow execution, not be fully functional
+- explicit instruction: "If you see an import or class that is not standard library, MOCK IT or stub it. Do not assume it exists."
 
 Return the enhanced code that:
 - Is self-contained and executable
