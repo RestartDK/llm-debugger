@@ -214,22 +214,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-# MCP Server output directories
-# Ignore timestamped files but keep dummy test files for consistent testing
-
-# contexts/ directory - ignore timestamped files
-# Timestamped context files: code_context_YYYY-MM-DD_HH-MM-SS.txt
-contexts/code_context_*.txt
-# Timestamped graph files: YYYY-MM-DD_HH-MM.json (but keep dummy files)
-contexts/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9].json
-# But keep dummy files and .gitkeep
-!contexts/dummy_*.txt
-!contexts/dummy_*.json
-!contexts/.gitkeep
-
-# instructions/ directory - ignore timestamped files
-# Timestamped instruction files: YYYY-MM-DD_HH-MM.txt (but keep dummy files)
-instructions/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9].txt
-# But keep dummy files
-!instructions/dummy_*.txt
