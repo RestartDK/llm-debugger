@@ -347,7 +347,7 @@ if __name__ == "__main__":
     # If stdin is a TTY, run HTTP server; otherwise run stdio MCP server
     if sys.stdin.isatty():
         # Running interactively - start HTTP server
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+        uvicorn.run(app, host="0.0.0.0", port=8000)
     else:
         # Running via stdio (for Cursor MCP) - run MCP server
         mcp.run()
