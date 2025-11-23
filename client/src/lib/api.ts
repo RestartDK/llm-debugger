@@ -19,7 +19,7 @@ class HttpError extends Error {
 
 const normalizeBaseUrl = (url: string | undefined): string => {
   if (!url) {
-    return 'http://localhost:8000';
+    return 'https://coolify.scottbot.party/llm_debugger';
   }
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };
