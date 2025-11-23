@@ -268,7 +268,9 @@ async def execute_test_cases_endpoint(request: Request):
     try:
         data = await request.json()
         logger.info(f"POST /execute_test_cases - Received: {data}")
-        result = execute_test_cases(data)
+        # Run the synchronous function in a thread pool to avoid event loop conflicts
+        # This prevents issues if execute_test_cases() or its dependencies use asyncio.run()
+        result = await asyncio.to_thread(execute_test_cases, data)
         logger.info(f"POST /execute_test_cases - Response: {result}")
         return result
     except Exception as e:
