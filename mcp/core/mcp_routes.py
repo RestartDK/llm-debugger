@@ -65,13 +65,28 @@ def get_tools_list_schema() -> dict:
             "tools": [
                 {
                     "name": "submit_code_context_mcp",
-                    "description": "Submit potential bug areas from codebase analysis. When user reports a bug/error, scan codebase to identify potential bug areas and send ALL candidates in ONE tool call. REQUIRES SEQUENCE: [Code Chunk 1] with actual code (5-10 lines), File path, Lines range (dash format), [Explanation] (what bug + which related chunks are problematic vs. good), [Relationships] (structural/logical/data flow only, MUST include actual code from related chunks) → [Code Chunk 2] with same format → repeat. CRITICAL: Include MULTIPLE chunks, each with real executable code (not English descriptions). Relationships must show actual code from related chunks. Example: [Code Chunk 1] File: src/utils.py Lines: 15-24 def process_data(items): ... [Explanation] This function doesn't handle None input, which could cause TypeError. Code Chunk 2 is problematic because... [Relationships] Called by calculate_totals(). Related code: File: src/calc.py Lines: 8-12 def calculate_totals(data): ...",
+                    "description": (
+                        "Submit ALL potential bug areas (multiple code chunks) discovered when investigating a user-reported issue. "
+                        "For EVERY chunk include, in order: [Code Chunk N] with actual source (5-10 lines, no paraphrasing), "
+                        "File: <filepath>, Lines: <start>-<end> (dash format), [Explanation] describing what bug this chunk can cause "
+                        "and which related chunks look problematic vs. good, and [Relationships] describing only structural/logical/data-flow "
+                        "links. Relationships MUST embed the actual related code (5-10 lines) plus its file path and line range—"
+                        "never summarize in prose. Repeat this entire block for each chunk so the tool call contains multiple code chunks."
+                    ),
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "text": {
                                 "type": "string",
-                                "description": "Raw text containing MULTIPLE code chunks in sequence. Each chunk must have: [Code Chunk N] with actual code (5-10 lines), File: <filepath>, Lines: <start>-<end> (dash format), [Explanation] (what bug might occur + which related chunks are problematic vs. good), [Relationships] (structural/logical/data flow only, no error context, MUST include actual code from related chunks showing file path and line range). Repeat this pattern for each potential bug area. Must include real executable code blocks, not English descriptions. Send ALL potential bug areas in one tool call."
+                                "description": (
+                                    "Raw text payload that repeats the REQUIRED format for MULTIPLE code chunks: "
+                                    "[Code Chunk N] with real source code (5-10 lines, copy directly from file), "
+                                    "File: <filepath>, Lines: <start>-<end> (dash format), "
+                                    "[Explanation] describing the possible bug and identifying which related chunks are problematic vs. good, "
+                                    "[Relationships] describing structural/logical/data-flow links ONLY and embedding the actual code from "
+                                    "those related chunks (include file path + line range). Provide ALL candidate chunks discovered during the "
+                                    "bug investigation in ONE tool call. No English-only descriptions—every chunk and relationship must include code."
+                                )
                             }
                         },
                         "required": ["text"]

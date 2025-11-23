@@ -336,6 +336,13 @@ async def sse_stream(request: Request):
     return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 
+@app.post("/sse")
+async def sse_post(request: Request):
+    """Compatibility handler for clients that POST to /sse instead of /sse/message."""
+    logger.info("POST /sse - forwarding payload to /sse/message handler")
+    return await sse_message(request)
+
+
 @app.post("/sse/message")
 async def sse_message(request: Request):
     """Handle MCP JSON-RPC messages sent over HTTP and echo them to the SSE stream."""
@@ -352,7 +359,7 @@ async def sse_message(request: Request):
 
     result = await sse_message_handler(request, mcp_instance=mcp)
     await queue.put(result)
-    return JSONResponse({"status": "ok"})
+    return JSONResponse(result)
 
 
 @app.options("/sse")
