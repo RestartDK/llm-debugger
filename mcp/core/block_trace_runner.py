@@ -27,7 +27,7 @@ def _load_sources(sources: List[Dict[str, str]], namespace: Dict[str, object]) -
         Each error dict contains: {"file_path": str, "error_type": str, "message": str, "traceback": str}
     """
     errors = []
-    
+
     for entry in sources:
         file_path = entry["file_path"]
         code = entry["code"]
@@ -37,20 +37,20 @@ def _load_sources(sources: List[Dict[str, str]], namespace: Dict[str, object]) -
         print(f"[runner] Available stubs in namespace: {[k for k in namespace.keys() if not k.startswith('__')]}", file=sys.stderr)
         
         try:
-            parts = module_name.split(".")
-            for idx in range(1, len(parts)):
-                pkg_name = ".".join(parts[:idx])
-                if pkg_name not in sys.modules:
-                    pkg_module = types.ModuleType(pkg_name)
-                    pkg_module.__path__ = []  # type: ignore[attr-defined]
-                    sys.modules[pkg_name] = pkg_module
-            module = types.ModuleType(module_name)
-            module.__file__ = file_path
-            compiled = compile(code, file_path, "exec")
+        parts = module_name.split(".")
+        for idx in range(1, len(parts)):
+            pkg_name = ".".join(parts[:idx])
+            if pkg_name not in sys.modules:
+                pkg_module = types.ModuleType(pkg_name)
+                pkg_module.__path__ = []  # type: ignore[attr-defined]
+                sys.modules[pkg_name] = pkg_module
+        module = types.ModuleType(module_name)
+        module.__file__ = file_path
+        compiled = compile(code, file_path, "exec")
             
             # Execute with error handling
             try:
-                exec(compiled, module.__dict__)
+        exec(compiled, module.__dict__)
                 print(f"[runner] Successfully loaded source file: {file_path}", file=sys.stderr)
             except NameError as e:
                 # Check if it's a decorator-related error
@@ -109,12 +109,12 @@ def _load_sources(sources: List[Dict[str, str]], namespace: Dict[str, object]) -
                 print(f"[runner] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
                 continue
             
-            sys.modules[module_name] = module
-            if len(parts) > 1:
-                parent_name = ".".join(parts[:-1])
-                setattr(sys.modules[parent_name], parts[-1], module)
-            # Mirror definitions into the shared namespace for tests
-            namespace.update(module.__dict__)
+        sys.modules[module_name] = module
+        if len(parts) > 1:
+            parent_name = ".".join(parts[:-1])
+            setattr(sys.modules[parent_name], parts[-1], module)
+        # Mirror definitions into the shared namespace for tests
+        namespace.update(module.__dict__)
             
         except Exception as e:
             # Catch-all for any other errors during module setup

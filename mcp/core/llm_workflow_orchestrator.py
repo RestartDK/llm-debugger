@@ -358,7 +358,7 @@ def run_generated_test_through_tracer_and_analyze(
     # Convert EnhancedSource objects back to Dict format for payload
     enhanced_source_entries = []
     for enhanced in enhanced_sources_list:
-        print(
+    print(
             f"[orchestrator] Enhanced {enhanced.file_path}: "
             f"added {len(enhanced.added_imports)} imports/stubs, "
             f"reasoning: {enhanced.reasoning[:100]}...",
@@ -496,7 +496,7 @@ def run_generated_test_through_tracer_and_analyze(
         error_info = trace_payload.get("error")
         test_execution_error = trace_payload.get("test_execution_error")
         source_loading_errors = trace_payload.get("source_loading_errors", [])
-        stderr_text = trace_payload.get("stderr")
+    stderr_text = trace_payload.get("stderr")
         stdout_text = trace_payload.get("stdout", "")
         returncode = trace_payload.get("returncode", -1)
         
@@ -637,7 +637,7 @@ def run_generated_test_through_tracer_and_analyze(
         if source_loading_errors:
              decorator_errors = [e for e in source_loading_errors if e.get("error_type") == "decorator_framework_error"]
              if decorator_errors:
-                 actual_description = (
+        actual_description = (
                      f"Source code failed to load due to framework decorator errors. "
                      f"Files affected: {', '.join(e['file_path'] for e in decorator_errors)}. "
                      f"Framework stubs were provided but may need additional objects. "
@@ -711,8 +711,8 @@ def run_generated_test_through_tracer_and_analyze(
         else (
             test_execution_error.get("message", "All assertions passed (no error)")
             if test_execution_error
-            else "All assertions passed (no error)"
-        )
+        else "All assertions passed (no error)"
+    )
     )
     notes = (
         error_info.get("traceback") 
@@ -1194,6 +1194,7 @@ def generate_instruction_file_from_test_results(
     
     # Generate fix instructions using LLM
     original_sources_list = list(original_sources)
+    print(f"[orchestrator] Making final LLM call to generate fix instructions...", file=sys.stderr)
     instructions_text = generate_fix_instructions(
         agent=agent.agent,
         passed_tests=passed_tests,
@@ -1201,6 +1202,7 @@ def generate_instruction_file_from_test_results(
         original_sources=original_sources_list,
         task_description=task_description,
     )
+    print(f"[orchestrator] Final LLM call completed. Generated instructions length: {len(instructions_text)} characters", file=sys.stderr)
     
     # Collect final analyses from all test results
     final_analyses = []
@@ -1285,6 +1287,7 @@ If you need more context from a file, request it before editing.
     
     # Write instruction file (same pattern as send_debugger_response)
     try:
+        print(f"[orchestrator] Writing instruction file after final LLM call: {filename}", file=sys.stderr)
         print(f"[orchestrator] Opening file for writing: {filepath}", file=sys.stderr)
         with open(filepath, 'w', encoding='utf-8') as f:
             bytes_written = f.write(instruction_file_content)
@@ -1293,7 +1296,7 @@ If you need more context from a file, request it before editing.
         # Verify file was written
         if os.path.exists(filepath):
             file_size = os.path.getsize(filepath)
-            print(f"[orchestrator] Instruction file saved successfully: {filepath} (size: {file_size} bytes)", file=sys.stderr)
+            print(f"[orchestrator] Instruction file saved successfully after testing suite: {filename} (full path: {filepath}, size: {file_size} bytes)", file=sys.stderr)
         else:
             print(f"[orchestrator] ERROR: File does not exist after write: {filepath}", file=sys.stderr)
     except Exception as e:

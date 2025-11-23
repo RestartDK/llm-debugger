@@ -34,7 +34,7 @@ def make_line_tracer(
         "unmatched_samples": [],  # type: ignore[assignment]
     }
     unmatched_samples: List[Tuple[str, int]] = []
-    
+
     # Log tracer initialization
     lookup_size = len(exit_line_lookup)
     print(
@@ -92,7 +92,7 @@ def make_line_tracer(
                     f"block_id={block_id}, file={filename}:{frame.f_lineno}, "
                     f"locals_count={locals_count}",
                     file=sys.stderr,
-                )
+            )
             step_counter["value"] += 1
         else:
             # Collect a small sample of unmatched events for debugging.

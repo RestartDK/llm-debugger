@@ -81,7 +81,7 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
             print(f"[test_cases] Successfully converted {len(blocks)} blocks", file=sys.stderr)
     else:
         print("[test_cases] No blocks provided, using dummy blocks", file=sys.stderr)
-        blocks = get_dummy_blocks()
+    blocks = get_dummy_blocks()
 
     execute_all_tests = data.get("execute_all_tests", False)
     print(f"[test_cases] execute_all_tests={execute_all_tests}", file=sys.stderr)

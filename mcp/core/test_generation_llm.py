@@ -295,20 +295,20 @@ Goals:
 7. Provide structured output that strictly matches the JSON schema below. ALL fields must be present and of the correct type.
 
 CRITICAL: You MUST provide structured output matching this exact schema:
-{{
+   {{
   "target_function": "string (required)",
   "summary": "string (required)",
   "test_style": "pytest|unittest|doctest|custom (required)",
-  "tests": [
-    {{
+     "tests": [
+       {{
       "name": "string (required)",
       "description": "string (required)",
       "input": "string (required)",
       "expected_output": "string (REQUIRED - must be a string, never null. Use empty string '' if no output expected, but always provide a string)",
       "notes": "string or null (optional)"
-    }}
-  ]
-}}
+       }}
+     ]
+   }}
 
 IMPORTANT STRUCTURED OUTPUT RULES:
 - ALL required fields must be present and non-null

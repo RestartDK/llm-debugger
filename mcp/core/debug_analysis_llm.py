@@ -195,8 +195,8 @@ def analyze_failed_test(
         test_name = failed_test.name or "unnamed"
         caller_info = f"File: {__file__}, Line: {call_line}, Function: {caller_frame.function}, Output Type: structured (DebugAnalysis), Test: {test_name}"
         print(f"[groq_call] {caller_info}", file=sys.stderr)
-        run_result = agent.run_sync(prompt, output_type=DebugAnalysis)
-        return run_result.output
+    run_result = agent.run_sync(prompt, output_type=DebugAnalysis)
+    return run_result.output
     except Exception as e:
         error_type = type(e).__name__
         error_msg = str(e)

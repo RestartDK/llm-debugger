@@ -58,26 +58,26 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
       
       {/* Final Analysis and Problems below */}
       <div className="flex-1 min-h-0">
-        <ResizablePanelGroup direction="vertical">
-          <ResizablePanel defaultSize={70} minSize={30}>
+      <ResizablePanelGroup direction="vertical">
+        <ResizablePanel defaultSize={70} minSize={30}>
             <FinalAnalysis
               finalAnalysis={finalAnalysis}
               attempts={attempts}
               suite={suite}
               testCase={testCase}
-            />
-          </ResizablePanel>
-          
-          <ResizableHandle className="h-1 bg-transparent hover:bg-primary/10 transition-colors" />
-          
-          <ResizablePanel defaultSize={30} minSize={15}>
-            <ProblemsList
-              problems={problems}
-              activeStepId={activeStepId}
-              onProblemSelect={onStepSelect}
-            />
-          </ResizablePanel>
-        </ResizablePanelGroup>
+          />
+        </ResizablePanel>
+        
+        <ResizableHandle className="h-1 bg-transparent hover:bg-primary/10 transition-colors" />
+        
+        <ResizablePanel defaultSize={30} minSize={15}>
+          <ProblemsList
+            problems={problems}
+            activeStepId={activeStepId}
+            onProblemSelect={onStepSelect}
+          />
+        </ResizablePanel>
+      </ResizablePanelGroup>
       </div>
     </div>
   );

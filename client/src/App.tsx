@@ -293,18 +293,18 @@ function App() {
           onExpand={() => setIsSidebarCollapsed(false)}
           className={isSidebarCollapsed ? "min-w-0 transition-all duration-300 ease-in-out" : "transition-all duration-300 ease-in-out"}
         >
-            <LeftPanel
-              steps={steps}
-              problems={problems}
-              activeStepId={activeStepId}
-              onStepSelect={handleStepSelect}
-              isCollapsed={isSidebarCollapsed}
+          <LeftPanel
+            steps={steps}
+            problems={problems}
+            activeStepId={activeStepId}
+            onStepSelect={handleStepSelect}
+            isCollapsed={isSidebarCollapsed}
               suite={suite}
               testCase={testCase}
               analysis={analysis}
               attempts={attempts}
               finalAnalysis={finalAnalysis}
-            />
+          />
         </ResizablePanel>
 
         <ResizableHandle withHandle={!isSidebarCollapsed} />
