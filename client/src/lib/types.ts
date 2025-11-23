@@ -69,6 +69,5 @@ export interface DebuggerPayload extends ControlFlowResponse {
 }
 
 export interface ExecuteTestCasesRequest {
-  task_description: string;
   sources?: { file_path: string; code: string }[];
 }

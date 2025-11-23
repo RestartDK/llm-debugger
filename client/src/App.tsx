@@ -51,11 +51,51 @@ function App() {
     }
   }, [activeStepId, steps]);
 
+  const mergeNodesWithAnalysis = (
+    current: Node<CfgNodeData>[],
+    updates?: Node<CfgNodeData>[],
+  ): Node<CfgNodeData>[] => {
+    if (!updates || updates.length === 0) {
+      return current;
+    }
+
+    const updateMap = new Map(updates.map((node) => [node.id, node]));
+    const existingIds = new Set(current.map((node) => node.id));
+
+    const merged = current.map((node) => {
+      const update = updateMap.get(node.id);
+      if (!update) {
+        return node;
+      }
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          ...update.data,
+        },
+      };
+    });
+
+    // Append any nodes that were only present in the analysis payload.
+    updates.forEach((node) => {
+      if (!existingIds.has(node.id)) {
+        merged.push(node);
+        existingIds.add(node.id);
+      }
+    });
+
+    return merged;
+  };
+
   const handleAnalysisSuccess = (payload: Awaited<ReturnType<typeof executeTestCases>>) => {
     setSteps(payload.steps ?? []);
     setProblems(payload.problems ?? []);
-    setNodes(payload.nodes ?? []);
-    setEdges(payload.edges ?? []);
+
+    setNodes((prev) => mergeNodesWithAnalysis(prev, payload.nodes));
+
+    if (payload.edges && payload.edges.length > 0) {
+      setEdges(payload.edges);
+    }
 
     if (payload.problems && payload.problems.length > 0) {
       const firstProblem = payload.problems[0];
@@ -82,7 +122,6 @@ function App() {
     setAnalysisError(null);
     try {
       const payload = await executeTestCases({
-        task_description: 'Inspect control flow for dummy ecommerce pipeline',
       });
       handleAnalysisSuccess(payload);
     } catch (error) {
