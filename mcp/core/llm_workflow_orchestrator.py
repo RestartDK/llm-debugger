@@ -306,11 +306,32 @@ def run_generated_test_through_tracer_and_analyze(
     trace_payload = run_with_block_tracing_subprocess(payload=payload)
     trace_entries: List[Dict[str, Any]] = trace_payload.get("trace", []) or []
     error_info: Dict[str, Any] | None = trace_payload.get("error")
+    source_loading_errors: List[Dict[str, Any]] = trace_payload.get("source_loading_errors", [])
     stderr_text = trace_payload.get("stderr")
+    
     print(
         f"[orchestrator] trace_entries count: {len(trace_entries)}, "
         f"error_info: {error_info}",
     )
+    
+    # Log source loading errors if any
+    if source_loading_errors:
+        print(f"[orchestrator] WARNING: {len(source_loading_errors)} source file(s) failed to load:", file=sys.stderr)
+        for err in source_loading_errors:
+            error_type = err.get("error_type", "unknown")
+            file_path = err.get("file_path", "unknown")
+            message = err.get("message", "Unknown error")
+            print(
+                f"[orchestrator]   - {file_path}: {error_type} - {message[:150]}",
+                file=sys.stderr,
+            )
+            if error_type == "decorator_framework_error":
+                print(
+                    f"[orchestrator]     This is likely a framework decorator issue. "
+                    f"Stubs were provided but may need additional framework objects.",
+                    file=sys.stderr,
+                )
+    
     if stderr_text:
         print("[orchestrator] runner stderr:\n", stderr_text)
 
@@ -344,14 +365,32 @@ def run_generated_test_through_tracer_and_analyze(
             },
         )
         
-        # Test failed before executing any blocks (e.g., syntax error, missing function call)
-        # Return a minimal result with error information but no block analysis
-        actual_description = (
-            error_info.get("message", "Test failed before executing any code blocks")
-            if error_info
-            else "Test failed before executing any code blocks"
-        )
-        notes = error_info.get("traceback") if error_info else None
+        # Test failed before executing any blocks (e.g., syntax error, missing function call, source loading error)
+        # Check if we have source loading errors
+        if source_loading_errors:
+            # Prioritize source loading errors in the description
+            decorator_errors = [e for e in source_loading_errors if e.get("error_type") == "decorator_framework_error"]
+            if decorator_errors:
+                actual_description = (
+                    f"Source code failed to load due to framework decorator errors. "
+                    f"Files affected: {', '.join(e['file_path'] for e in decorator_errors)}. "
+                    f"Framework stubs were provided but may need additional objects. "
+                    f"Original error: {decorator_errors[0].get('message', 'Unknown')}"
+                )
+                notes = decorator_errors[0].get("traceback")
+            else:
+                actual_description = (
+                    f"Source code failed to load. "
+                    f"Files affected: {', '.join(e['file_path'] for e in source_loading_errors)}. "
+                    f"Errors: {source_loading_errors[0].get('message', 'Unknown error')}"
+                )
+                notes = source_loading_errors[0].get("traceback")
+        elif error_info:
+            actual_description = error_info.get("message", "Test failed before executing any code blocks")
+            notes = error_info.get("traceback")
+        else:
+            actual_description = "Test failed before executing any code blocks"
+            notes = None
         
         # Create a minimal debug analysis indicating no blocks were executed
         from .debug_analysis_llm import DebugAnalysis
