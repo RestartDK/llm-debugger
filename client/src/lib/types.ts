@@ -60,13 +60,42 @@ export interface ControlFlowResponse {
   task_description?: string;
 }
 
+export interface TestCase {
+  name: string;
+  description: string;
+  input: string;
+  expected_output: string;
+  notes?: string | null;
+}
+
+export interface TestSuite {
+  target_function: string;
+  summary: string;
+  test_style: string;
+  tests: TestCase[];
+}
+
+export interface FailedTest {
+  name: string;
+  input: string;
+  expected: string;
+  actual: string;
+  notes?: string | null;
+}
+
+export interface Analysis {
+  task_description: string;
+  failed_test?: FailedTest;
+  assessments?: unknown[];
+}
+
 export interface DebuggerPayload extends ControlFlowResponse {
-  suite: Record<string, unknown>;
-  test_case: Record<string, unknown>;
+  suite?: TestSuite;
+  test_case?: TestCase;
   trace: Record<string, unknown>[];
   steps: RuntimeStep[];
   problems: Problem[];
-  analysis: Record<string, unknown>;
+  analysis?: Analysis;
 }
 
 export interface ExecuteTestCasesRequest {

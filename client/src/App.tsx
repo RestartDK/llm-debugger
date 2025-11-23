@@ -13,6 +13,9 @@ import type {
   CfgNodeData,
   Problem,
   RuntimeStep,
+  TestSuite,
+  TestCase,
+  Analysis,
 } from './lib/types';
 import {
   ResizablePanelGroup,
@@ -35,6 +38,9 @@ function App() {
   const [taskDescription, setTaskDescription] = useState<string | undefined>(
     undefined,
   );
+  const [suite, setSuite] = useState<TestSuite | undefined>(undefined);
+  const [testCase, setTestCase] = useState<TestCase | undefined>(undefined);
+  const [analysis, setAnalysis] = useState<Analysis | undefined>(undefined);
 
   const leftPanelRef = useRef<ImperativePanelHandle>(null);
   
@@ -99,6 +105,9 @@ function App() {
   const handleAnalysisSuccess = (payload: Awaited<ReturnType<typeof executeTestCases>>) => {
     setSteps(payload.steps ?? []);
     setProblems(payload.problems ?? []);
+    setSuite(payload.suite);
+    setTestCase(payload.test_case);
+    setAnalysis(payload.analysis);
 
     setNodes((prev) => mergeNodesWithAnalysis(prev, payload.nodes));
 
@@ -285,6 +294,9 @@ function App() {
             activeStepId={activeStepId}
             onStepSelect={handleStepSelect}
             isCollapsed={isSidebarCollapsed}
+            suite={suite}
+            testCase={testCase}
+            analysis={analysis}
           />
         </ResizablePanel>
 
