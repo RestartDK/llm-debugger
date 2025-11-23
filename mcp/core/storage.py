@@ -28,8 +28,8 @@ def save_code_context(text: str) -> str:
     
     # Write text to file
     try:
-    with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(text)
+        with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(text)
         return f"Code context saved successfully to {filename}"
     except IOError as e:
         return f"Error saving code context: {str(e)}"
