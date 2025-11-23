@@ -20,6 +20,8 @@ import re
 from pathlib import Path
 from datetime import datetime
 from textwrap import dedent as _dedent
+import asyncio
+from . import mcp_routes
 
 
 def render_generated_test_case_to_python(
@@ -164,128 +166,50 @@ def apply_suggested_fixes_to_source(
     """
 
     if not instructions:
-        print("No instructions provided to apply_suggested_fixes_to_source")
-        return
+        raise ValueError("No instructions provided to apply_suggested_fixes_to_source")
 
-    # Normalize line endings and ensure consistent formatting
-    instructions = _dedent(instructions).strip()
+    # Normalize the instructions text and forward to MCP as a tool call.
+    text = _dedent(task_description).strip() + _dedent(instructions).strip()
 
-    # Split into code chunk sections
-    chunks = [c.strip() for c in re.split(r"\[Code Chunk\]", instructions) if c.strip()]
+    # Build a tools/call request to invoke the MCP tool that handles code context
+    params = {
+        "name": "submit_code_context_mcp",
+        "arguments": {"text": text},
+    }
 
-    repo_root = Path.cwd()
+    # Attempt to schedule the MCP request on the running event loop so that
+    # the MCP machinery can route the response (and potentially forward to Cursor).
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
 
-    for chunk in chunks:
-        # Extract File: line
-        m = re.search(r"File:\s*(.+)", chunk)
-        if not m:
-            print("Skipping chunk: no File: line found")
-            continue
-        raw_path = m.group(1).strip()
-
-        # Some instruction producers include the repository name as a prefix; try to normalize
-        candidate_paths = [raw_path]
-        if raw_path.startswith("llm-debugger/"):
-            candidate_paths.append(raw_path[len("llm-debugger/"):])
-        if raw_path.startswith("./"):
-            candidate_paths.append(raw_path[2:])
-
-        target_path = None
-        for p in candidate_paths:
-            candidate = repo_root.joinpath(p)
-            if candidate.exists():
-                target_path = candidate
-                break
-
-        if target_path is None:
-            # Try relative lookup ignoring any leading path segments (fallback)
-            parts = Path(raw_path).parts
-            for i in range(len(parts)):
-                try_p = repo_root.joinpath(*parts[i:])
-                if try_p.exists():
-                    target_path = try_p
-                    break
-
-        if target_path is None:
-            print(f"File not found for chunk: '{raw_path}' - skipped")
-            continue
-
-        # Extract Changed: and To: blocks
-        changed_match = re.search(r"Changed:\s*(.*?)\s*(?:To:|\Z)", chunk, flags=re.S)
-        to_match = re.search(r"To:\s*(.*?)(?:\n\s*\[Explanation\]|\Z)", chunk, flags=re.S)
-
-        if not changed_match or not to_match:
-            print(f"Chunk for '{target_path}' missing Changed:/To: blocks - skipped")
-            continue
-
-        changed_snippet = _dedent(changed_match.group(1)).strip('\n')
-        new_snippet = _dedent(to_match.group(1)).strip('\n')
-
-        if not changed_snippet:
-            print(f"Empty 'Changed' snippet for {target_path} - skipped")
-            continue
-
-        # Read existing file content
+    async def _invoke():
         try:
-            with open(target_path, 'r', encoding='utf-8') as f:
-                file_text = f.read()
+            # process_mcp_request will return a JSON-RPC response dict
+            response = await mcp_routes.process_mcp_request(
+                method="tools/call",
+                params=params,
+                request_id=None,
+                mcp_instance=None,
+                connection_id=None,
+            )
+            # print("MCP forwarded suggestions, response:", response)
+            return response
         except Exception as e:
-            print(f"Failed to read {target_path}: {e}")
-            continue
+            # print("Error forwarding suggestions to MCP:", e)
+            return {"error": str(e)}
 
-        # Try to locate the exact changed snippet in the file
-        if changed_snippet in file_text:
-            new_text = file_text.replace(changed_snippet, new_snippet, 1)
-            already_applied = False
-        else:
-            # If exact match not found, check whether the new snippet is already present
-            if new_snippet and new_snippet in file_text:
-                print(f"Patch for {target_path} already applied - skipping")
-                continue
-
-            # Fallback: try a whitespace-normalized match
-            def normalize(s: str) -> str:
-                return re.sub(r"\s+", " ", s).strip()
-
-            norm_changed = normalize(changed_snippet)
-            norm_text = normalize(file_text)
-            if norm_changed and norm_changed in norm_text:
-                # Build a new normalized file and then attempt to map replacement naively
-                # This is a best-effort fallback; if it fails, skip
-                idx = norm_text.index(norm_changed)
-                # Can't easily map back to original indices reliably; skip
-                print(f"Found whitespace-normalized match for {target_path} but cannot safely apply - skipped")
-                continue
-            else:
-                print(f"Original snippet not found in {target_path} - skipped")
-                continue
-
-        # Backup original file
+    if loop:
+        # Schedule asynchronously and don't block the caller
+        loop.create_task(_invoke())
+    else:
+        # No running loop — run synchronously
         try:
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = target_path.with_suffix(target_path.suffix + f".bak_{ts}")
-            with open(backup_path, 'w', encoding='utf-8') as bf:
-                bf.write(file_text)
+            result = asyncio.run(_invoke())
+            print("MCP forwarded suggestions (sync), response:", result)
         except Exception as e:
-            print(f"Failed to create backup for {target_path}: {e}")
-            continue
-
-        # Write the updated file
-        try:
-            with open(target_path, 'w', encoding='utf-8') as out:
-                out.write(new_text)
-            print(f"Applied patch to {target_path} (backup: {backup_path.name})")
-        except Exception as e:
-            print(f"Failed to write updated file {target_path}: {e}")
-            # Attempt to restore from backup
-            try:
-                with open(backup_path, 'r', encoding='utf-8') as bf:
-                    orig = bf.read()
-                with open(target_path, 'w', encoding='utf-8') as out:
-                    out.write(orig)
-                print(f"Restored original from backup for {target_path}")
-            except Exception:
-                print(f"Failed to restore backup for {target_path} - manual intervention required")
+            print("Failed to forward suggestions to MCP:", e)
 
     return
 
