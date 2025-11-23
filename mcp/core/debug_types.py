@@ -57,6 +57,11 @@ class ExecutionAttempt:
     error_summary: Optional[str] = None
     code_snapshot: List[Dict[str, str]] = field(default_factory=list)  # list of {file_path, code}
     reasoning: Optional[str] = None  # why this fix was applied
+    # New fields for subprocess execution
+    command: Optional[str] = None  # the subprocess command executed
+    stdout: Optional[str] = None  # captured stdout
+    stderr: Optional[str] = None  # captured stderr
+    returncode: Optional[int] = None  # subprocess return code
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

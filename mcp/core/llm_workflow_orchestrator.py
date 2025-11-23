@@ -21,6 +21,12 @@ from .dummy_cfg import get_dummy_blocks, get_dummy_sources
 from .mcp_tools import build_runner_payload, run_with_block_tracing_subprocess
 from .source_enhancement_llm import EnhancedSource
 from .test_generation_llm import GeneratedTestCase, GeneratedTestSuite
+from .subprocess_executor import (
+    generate_subprocess_command,
+    execute_subprocess_command,
+    repair_subprocess_command,
+    SubprocessExecutionResult,
+)
 from textwrap import dedent as _dedent
 import asyncio
 from . import mcp_routes
@@ -369,50 +375,118 @@ def run_generated_test_through_tracer_and_analyze(
     else:
         print(f"[orchestrator] Received {len(block_entries)} blocks", file=sys.stderr)
     
+    # OLD EXECUTION SYSTEM (COMMENTED OUT)
     # Helper function to execute with enhanced sources
-    def _execute_with_sources(sources_to_use: List[Dict[str, str]], attempt_num: int = 1) -> Dict[str, Any]:
-        print(
-            f"[orchestrator] Execution attempt {attempt_num} with {len(sources_to_use)} source file(s)",
-            file=sys.stderr,
-        )
-        payload = build_runner_payload(
-            sources=sources_to_use,
-            blocks=block_entries,
-            tests=tests_code,
-        )
-        print(
-            f"[orchestrator] Building runner payload (attempt {attempt_num}):",
-            {
-                "sources_count": len(sources_to_use),
-                "sources": [entry["file_path"] for entry in sources_to_use],
-                "blocks_count": len(block_entries),
-                "blocks": [block.block_id for block in block_entries],
-                "tests_code_length": len(tests_code),
-                "tests_code_preview": tests_code[:200],
-            },
-        )
-        print(f"[orchestrator] Invoking block tracing subprocess (attempt {attempt_num})...", file=sys.stderr)
-        trace_payload = run_with_block_tracing_subprocess(payload=payload)
-        print(f"[orchestrator] Block tracing subprocess returned (attempt {attempt_num})", file=sys.stderr)
+    # def _execute_with_sources(sources_to_use: List[Dict[str, str]], attempt_num: int = 1) -> Dict[str, Any]:
+    #     print(
+    #         f"[orchestrator] Execution attempt {attempt_num} with {len(sources_to_use)} source file(s)",
+    #         file=sys.stderr,
+    #     )
+    #     payload = build_runner_payload(
+    #         sources=sources_to_use,
+    #         blocks=block_entries,
+    #         tests=tests_code,
+    #     )
+    #     print(
+    #         f"[orchestrator] Building runner payload (attempt {attempt_num}):",
+    #         {
+    #             "sources_count": len(sources_to_use),
+    #             "sources": [entry["file_path"] for entry in sources_to_use],
+    #             "blocks_count": len(block_entries),
+    #             "blocks": [block.block_id for block in block_entries],
+    #             "tests_code_length": len(tests_code),
+    #             "tests_code_preview": tests_code[:200],
+    #         },
+    #     )
+    #     print(f"[orchestrator] Invoking block tracing subprocess (attempt {attempt_num})...", file=sys.stderr)
+    #     trace_payload = run_with_block_tracing_subprocess(payload=payload)
+    #     print(f"[orchestrator] Block tracing subprocess returned (attempt {attempt_num})", file=sys.stderr)
+    #     return trace_payload
+    
+    # NEW EXECUTION SYSTEM: Extract code chunks from sources
+    code_chunks = [src["code"] for src in enhanced_source_entries]
+    print(f"[orchestrator] Extracted {len(code_chunks)} code chunks for subprocess execution", file=sys.stderr)
+    
+    # Helper function to execute with subprocess command
+    def _execute_with_subprocess_command(command: str, attempt_num: int = 1) -> Dict[str, Any]:
+        """Execute LLM-generated subprocess command and capture output."""
+        print(f"[orchestrator] Execution attempt {attempt_num} with subprocess command", file=sys.stderr)
+        print(f"[orchestrator] Command preview: {command[:200]}...", file=sys.stderr)
+        
+        result = execute_subprocess_command(command, timeout=10.0)
+        
+        # Convert SubprocessExecutionResult to trace_payload format for compatibility
+        trace_payload = {
+            "ok": result.success,
+            "trace": [],  # No trace entries in new system
+            "error": {
+                "message": result.error_message or "Command failed",
+                "traceback": result.stderr,
+            } if not result.success else None,
+            "test_execution_error": {
+                "error_type": "assertion_failure" if result.returncode != 0 else None,
+                "message": result.error_message or result.stderr,
+                "traceback": result.stderr,
+            } if not result.success and result.returncode != 0 else None,
+            "source_loading_errors": [],
+            "stderr": result.stderr,
+            "stdout": result.stdout,
+            "returncode": result.returncode,
+        }
+        
+        print(f"[orchestrator] Subprocess execution completed (attempt {attempt_num}): success={result.success}", file=sys.stderr)
         return trace_payload
     
-    # Iterative repair loop
+    # Iterative repair loop with subprocess commands
     max_attempts = 5
     attempt_count = 0
-    current_sources = enhanced_source_entries
+    current_command: Optional[str] = None
     attempts_history: List[ExecutionAttempt] = []
     final_trace_payload = {}
     
-    # Reason for the initial attempt (base enhancement)
-    initial_reasoning = "Initial enhancement to add missing imports and stubs."
-    if enhanced_sources_list:
-        initial_reasoning = enhanced_sources_list[0].reasoning
+    # Reason for the initial attempt
+    initial_reasoning = "Initial command generation from code chunks and test code."
     
     while attempt_count < max_attempts:
         attempt_count += 1
         
-        # Execute
-        trace_payload = _execute_with_sources(current_sources, attempt_num=attempt_count)
+        # Generate or repair command
+        if attempt_count == 1:
+            # First attempt: generate initial command
+            print(f"[orchestrator] Generating initial subprocess command (attempt {attempt_count})...", file=sys.stderr)
+            generated_cmd = generate_subprocess_command(
+                agent=agent,
+                code_chunks=code_chunks,
+                test_code=tests_code,
+                task_description=task_description,
+            )
+            current_command = generated_cmd.command
+            initial_reasoning = generated_cmd.reasoning or initial_reasoning
+        else:
+            # Subsequent attempts: repair failed command
+            print(f"[orchestrator] Repairing failed command (attempt {attempt_count})...", file=sys.stderr)
+            if current_command is None:
+                raise ValueError("Cannot repair: no command available")
+            
+            # Get error info from last attempt
+            last_result = final_trace_payload
+            stdout = last_result.get("stdout", "")
+            stderr = last_result.get("stderr", "")
+            returncode = last_result.get("returncode", -1)
+            
+            repaired_cmd = repair_subprocess_command(
+                agent=agent,
+                failed_command=current_command,
+                stdout=stdout,
+                stderr=stderr,
+                returncode=returncode,
+                attempt_number=attempt_count,
+            )
+            current_command = repaired_cmd.command
+            initial_reasoning = repaired_cmd.reasoning or f"Repaired command based on attempt {attempt_count - 1} failure"
+        
+        # Execute command
+        trace_payload = _execute_with_subprocess_command(current_command, attempt_num=attempt_count)
         final_trace_payload = trace_payload
         
         # Analyze result
@@ -421,11 +495,14 @@ def run_generated_test_through_tracer_and_analyze(
         test_execution_error = trace_payload.get("test_execution_error")
         source_loading_errors = trace_payload.get("source_loading_errors", [])
         stderr_text = trace_payload.get("stderr")
+        stdout_text = trace_payload.get("stdout", "")
+        returncode = trace_payload.get("returncode", -1)
         
         is_success = (
             not source_loading_errors 
             and not error_info 
             and not test_execution_error  # Check for assertion failures
+            and returncode == 0
         )
         status = "success" if is_success else "error"
         
@@ -437,14 +514,20 @@ def run_generated_test_through_tracer_and_analyze(
             error_summary = f"Runtime error: {error_info.get('message')}"
         elif test_execution_error:
             error_summary = f"Test assertion failed: {test_execution_error.get('message')}"
+        elif returncode != 0:
+            error_summary = f"Command failed with return code {returncode}"
             
-        # Record attempt
+        # Record attempt with subprocess execution details
         attempt = ExecutionAttempt(
             attempt_number=attempt_count,
             status=status,
             error_summary=error_summary,
-            code_snapshot=current_sources,
-            reasoning=initial_reasoning if attempt_count == 1 else None # Will be updated for subsequent attempts
+            code_snapshot=enhanced_source_entries,  # Keep for backward compatibility
+            reasoning=initial_reasoning,
+            command=current_command,
+            stdout=stdout_text,
+            stderr=stderr_text,
+            returncode=returncode,
         )
         
         # Update reasoning for the *previous* failed attempt that led to this one
@@ -485,45 +568,13 @@ def run_generated_test_through_tracer_and_analyze(
             print(f"[orchestrator] Success reasoning: {success_reasoning}", file=sys.stderr)
             break
             
-        # If we failed and have retries left, try to fix
-        if attempt_count < max_attempts:
+        # If we failed and have retries left, continue loop to repair command
+        # (Command repair happens at the start of next iteration)
+        if not is_success and attempt_count < max_attempts:
             print(
-                f"[orchestrator] Attempt {attempt_count} failed. Enhancing with error context...",
+                f"[orchestrator] Attempt {attempt_count} failed. Will repair command in next iteration...",
                 file=sys.stderr,
-            )
-            
-            # Combine all errors for context
-            context_errors = source_loading_errors or []
-            if error_info:
-                context_errors.append(error_info)
-            if test_execution_error:
-                context_errors.append(test_execution_error)  # Include assertion failures
-                
-            # Log source before re-enhancement
-            for src in source_entries:
-                print(f"[orchestrator] Source before re-enhancement ({src['file_path']}):\n{src['code'][:200]}...", file=sys.stderr)
-
-            re_enhanced_sources_list = agent.enhance_sources_for_execution(
-                sources=source_entries,  # Always start from base sources to apply cumulative fixes cleanly
-                error_context=context_errors,
-            )
-            
-            # Update current sources
-            current_sources = []
-            fix_reasoning = []
-            for enhanced in re_enhanced_sources_list:
-                current_sources.append({
-                    "file_path": enhanced.file_path,
-                    "code": enhanced.enhanced_code,
-                })
-                fix_reasoning.append(enhanced.reasoning)
-                print(f"[orchestrator] Re-enhanced Code ({enhanced.file_path}):\n{enhanced.enhanced_code[:500]}...", file=sys.stderr)
-            
-            # Store reasoning on the current attempt record (which failed) to explain the *next* attempt
-            # Or store it on the next attempt? Let's store it on the next attempt.
-            # Actually, ExecutionAttempt has 'reasoning' field which we defined as "why this fix was applied".
-            # So for the next attempt object created, we want this reasoning.
-            initial_reasoning = "; ".join(fix_reasoning) 
+            ) 
 
     # --- End of loop ---
 
@@ -551,8 +602,8 @@ def run_generated_test_through_tracer_and_analyze(
     if stderr_text:
         print("[orchestrator] runner stderr:\n", stderr_text)
 
-    # Use current_sources (which may have been re-enhanced) for block lookup
-    block_lookup = _build_block_info_lookup(block_entries, current_sources)
+    # Use enhanced_source_entries for block lookup (for backward compatibility)
+    block_lookup = _build_block_info_lookup(block_entries, enhanced_source_entries)
     snapshot_pairs = _build_runtime_snapshots_from_trace(trace_entries)
 
     block_infos: List[BlockInfo] = []
@@ -592,9 +643,23 @@ def run_generated_test_through_tracer_and_analyze(
         elif error_info:
             actual_description = error_info.get("message", "Test failed before executing any code blocks")
             notes = error_info.get("traceback")
+        elif test_execution_error:
+            actual_description = test_execution_error.get("message", "Test assertion failed")
+            notes = test_execution_error.get("traceback")
         else:
-            actual_description = "Test failed before executing any code blocks"
-            notes = None
+            # For subprocess execution, use stderr/stdout
+            stderr_msg = final_trace_payload.get("stderr", "")
+            stdout_msg = final_trace_payload.get("stdout", "")
+            returncode = final_trace_payload.get("returncode", -1)
+            if stderr_msg:
+                actual_description = f"Command failed (returncode={returncode}): {stderr_msg[:200]}"
+                notes = stderr_msg
+            elif stdout_msg:
+                actual_description = f"Command failed (returncode={returncode}): {stdout_msg[:200]}"
+                notes = stdout_msg
+            else:
+                actual_description = f"Command failed with return code {returncode}"
+                notes = None
         
         from .debug_analysis_llm import DebugAnalysis
         failed_test = FailedTest(
