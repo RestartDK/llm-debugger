@@ -270,7 +270,13 @@ def run_generated_test_through_tracer_and_analyze(
     5. Ask the LLM to diagnose which blocks misbehaved.
     """
 
-    source_entries = list(sources) if sources is not None else get_dummy_sources()
+    source_entries = list(sources) if sources is not None else None
+    if source_entries is None:
+        print("[orchestrator] WARNING: sources is None, falling back to DUMMY sources", file=sys.stderr)
+        source_entries = get_dummy_sources()
+    else:
+        print(f"[orchestrator] Received {len(source_entries)} source files", file=sys.stderr)
+
     if not source_entries:
         raise ValueError("No source files provided for test generation.")
 
@@ -294,6 +300,10 @@ def run_generated_test_through_tracer_and_analyze(
 
     # Enhance source code to be self-contained and executable
     print("[orchestrator] Enhancing source code for execution...", file=sys.stderr)
+    # Log original source code for comparison
+    for src in source_entries:
+        print(f"[orchestrator] Original Code ({src['file_path']}):\n{src['code'][:500]}...", file=sys.stderr)
+
     enhanced_sources_list = agent.enhance_sources_for_execution(sources=source_entries)
     
     # Convert EnhancedSource objects back to Dict format for payload
@@ -305,12 +315,18 @@ def run_generated_test_through_tracer_and_analyze(
             f"reasoning: {enhanced.reasoning[:100]}...",
             file=sys.stderr,
         )
+        print(f"[orchestrator] Enhanced Code ({enhanced.file_path}):\n{enhanced.enhanced_code[:500]}...", file=sys.stderr)
         enhanced_source_entries.append({
             "file_path": enhanced.file_path,
             "code": enhanced.enhanced_code,
         })
     
-    block_entries = list(blocks) if blocks is not None else get_dummy_blocks()
+    block_entries = list(blocks) if blocks is not None else None
+    if block_entries is None:
+        print("[orchestrator] WARNING: blocks is None, falling back to DUMMY blocks", file=sys.stderr)
+        block_entries = get_dummy_blocks()
+    else:
+        print(f"[orchestrator] Received {len(block_entries)} blocks", file=sys.stderr)
     
     # Helper function to execute with enhanced sources
     def _execute_with_sources(sources_to_use: List[Dict[str, str]], attempt_num: int = 1) -> Dict[str, Any]:
@@ -408,6 +424,10 @@ def run_generated_test_through_tracer_and_analyze(
             if error_info:
                 context_errors.append(error_info)
                 
+            # Log source before re-enhancement
+            for src in source_entries:
+                print(f"[orchestrator] Source before re-enhancement ({src['file_path']}):\n{src['code'][:200]}...", file=sys.stderr)
+
             re_enhanced_sources_list = agent.enhance_sources_for_execution(
                 sources=source_entries,  # Always start from base sources to apply cumulative fixes cleanly
                 error_context=context_errors,
@@ -422,6 +442,7 @@ def run_generated_test_through_tracer_and_analyze(
                     "code": enhanced.enhanced_code,
                 })
                 fix_reasoning.append(enhanced.reasoning)
+                print(f"[orchestrator] Re-enhanced Code ({enhanced.file_path}):\n{enhanced.enhanced_code[:500]}...", file=sys.stderr)
             
             # Store reasoning on the current attempt record (which failed) to explain the *next* attempt
             # Or store it on the next attempt? Let's store it on the next attempt.

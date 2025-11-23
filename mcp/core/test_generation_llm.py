@@ -60,7 +60,8 @@ Goals:
 2. Cover normal flow plus edge cases (empty inputs, error paths, boundary values).
 3. Produce deterministic tests with explicit assertions.
 4. Each test case MUST invoke the target function explicitly, assign the call to a variable named `result` (e.g., `result = my_func(...)`), and assert on `result` (or its fields) right after.
-5. Return data that strictly matches the JSON schema:
+5. Code chunks must be STANDALONE EXECUTABLE. You may add mock classes/functions or remove blocking external calls if needed. Add a 3-5 word comment (e.g., "# Mocking external API call") where you modify or mock things.
+6. Return data that strictly matches the JSON schema:
    {{
      "target_function": "...",
      "summary": "...",

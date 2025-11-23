@@ -70,8 +70,9 @@ Your task:
 1. Analyze the code to identify missing dependencies (imports, classes, enums, functions, constants, etc.)
 2. Infer reasonable implementations based on how these dependencies are used in the code
 3. Create minimal stubs or implementations that allow the code to execute
-4. Preserve the original code structure and logic exactly as-is
-5. Add only the minimal necessary code to make it executable
+4. You MAY modify the code to make it standalone executable (e.g., removing external API calls, mocking complex logic). 
+5. Add a 3-5 word comment (e.g., "# Mocking external dependency") wherever you add stubs or modify code to enable execution.
+6. Add only the minimal necessary code to make it executable
 
 Guidelines:
 - If you see `Language.ROUND` or similar enum-like usage, create an Enum class with appropriate values
@@ -79,13 +80,12 @@ Guidelines:
 - If a class/function is referenced but not defined, create a minimal stub that matches the usage pattern
 - For imports, add standard library imports or create stub modules as needed
 - For module-level constants, infer reasonable values based on usage
-- Do NOT modify the original code logic - only add missing dependencies
+- You can remove logic that blocks execution (like network calls) and replace with mocks, adding a comment.
 - Keep stubs minimal - they just need to allow execution, not be fully functional
 
 Return the enhanced code that:
 - Is self-contained and executable
 - Includes all necessary imports/stubs at the top
-- Preserves the original code exactly (only additions, no modifications)
 - Can be executed without NameError, ImportError, or similar dependency errors
 
 Return data that strictly matches the JSON schema:

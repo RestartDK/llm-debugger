@@ -50,8 +50,12 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
     )
     print(f"[test_cases] Task description: {task_description[:100]}...", file=sys.stderr)
 
-    sources = data.get("sources") or get_dummy_sources()
-    print(f"[test_cases] Using {len(sources)} source file(s)", file=sys.stderr)
+    sources = data.get("sources")
+    if not sources:
+        print("[test_cases] WARNING: No sources provided in request, using DUMMY sources", file=sys.stderr)
+        sources = get_dummy_sources()
+    else:
+        print(f"[test_cases] Using {len(sources)} provided source file(s)", file=sys.stderr)
     
     # Convert blocks from dict format to BasicBlock objects if provided
     blocks_raw = data.get("blocks")
