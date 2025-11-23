@@ -116,7 +116,7 @@ def run_with_block_tracing_subprocess(
 
     stdout = process.stdout.strip()
     try:
-    response = json.loads(stdout or "{}")
+        response = json.loads(stdout or "{}")
     except json.JSONDecodeError as e:
         print(
             f"[mcp_tools] ERROR: Failed to parse subprocess JSON response: {e}",
