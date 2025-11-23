@@ -5,7 +5,7 @@ import os
 from typing import Dict, List, Optional, Sequence
 
 from pydantic_ai import Agent as PydanticAgent
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.groq import GroqModel
 
 from .debug_analysis_llm import (
     BlockInfo,
@@ -42,27 +42,8 @@ class LlmDebugAgent:
             self._agent = agent
             return
 
-        # Configure for Groq via OpenAI compatibility
-        # User requested: openai/gpt-oss-120b
-        # Note: If passing "openai/" prefix, pydantic-ai might interpret it.
-        # However, for OpenAIModel with custom base_url, we usually pass the model ID directly.
-        # Assuming the user knows the model ID is "openai/gpt-oss-120b" or "gpt-oss-120b".
-        # If it fails, we might need to strip "openai/".
-        # But let's trust the user's string for now, or strip 'openai/' if it's a prefix convention.
-        
-        real_model_name = model_name
-        if model_name.startswith("openai/"):
-             # Sometimes used to denote provider, but Groq expects just the model ID usually?
-             # Actually, let's keep it as is unless we know for sure.
-             # Wait, OpenAIModel will send this `model` param to the API.
-             # Groq API expects models like "llama3-..." etc.
-             # "openai/gpt-oss-120b" sounds like a proxy or custom mapping.
-             # Given the user instruction, I will use it exactly.
-             pass
-
-        model = OpenAIModel(
-            real_model_name,
-            base_url="https://api.groq.com/openai/v1",
+        model = GroqModel(
+            model_name,
             api_key=os.getenv("GROQ_API_KEY"),
         )
         self._agent = PydanticAgent(model)
