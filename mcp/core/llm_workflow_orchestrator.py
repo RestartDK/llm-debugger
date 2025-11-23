@@ -46,6 +46,47 @@ def render_generated_test_case_to_python(
     )
 
 
+def _is_valid_generated_test_case(
+    case: GeneratedTestCase, target_function: str
+) -> bool:
+    """
+    Best-effort static validation to avoid running obviously broken tests.
+    """
+
+    input_code = (case.input or "").lower()
+    expected_code = (case.expected_output or "").lower()
+    target_lower = (target_function or "").lower()
+
+    has_result_assignment = "result =" in input_code
+    references_result = "result" in expected_code
+    calls_target = target_lower in input_code
+
+    return has_result_assignment and references_result and calls_target
+
+
+def _select_valid_test_index(
+    suite: GeneratedTestSuite, preferred_index: int
+) -> int:
+    """
+    Choose the first test that appears to call the target function and assign to result.
+    """
+
+    tests = suite.tests
+    if not tests:
+        raise ValueError("LLM did not return any generated tests.")
+
+    if 0 <= preferred_index < len(tests):
+        if _is_valid_generated_test_case(tests[preferred_index], suite.target_function):
+            return preferred_index
+
+    for idx, candidate in enumerate(tests):
+        if _is_valid_generated_test_case(candidate, suite.target_function):
+            return idx
+
+    # Fall back to the preferred index if none pass validation.
+    return max(0, min(preferred_index, len(tests) - 1))
+
+
 def _extract_code_snippet(
     source_lines: Sequence[str], start_line: int | None, end_line: int | None
 ) -> str:
@@ -238,7 +279,14 @@ def run_generated_test_through_tracer_and_analyze(
     if not (0 <= test_index < len(suite.tests)):
         raise IndexError(f"test_index {test_index} outside range of generated tests.")
 
-    test_case = suite.tests[test_index]
+    selected_index = _select_valid_test_index(suite, test_index)
+    if selected_index != test_index:
+        print(
+            f"[orchestrator] selected test index {selected_index} instead of "
+            f"preferred {test_index} due to validation heuristics."
+        )
+
+    test_case = suite.tests[selected_index]
     tests_code = render_generated_test_case_to_python(test_case, suite)
 
     block_entries = list(blocks) if blocks is not None else get_dummy_blocks()
@@ -325,12 +373,18 @@ def run_generated_test_through_tracer_and_analyze(
             assessments=[],  # No blocks to assess since none were executed
         )
         
+        fallback_blocks: List[BlockInfo] = [
+            block_lookup[block.block_id]
+            for block in block_entries
+            if block.block_id in block_lookup
+        ]
+
         return LlmDebugRunResult(
             suite=suite,
             test_case=test_case,
             trace_payload=trace_payload,
             debug_analysis=debug_analysis,
-            blocks=[],
+            blocks=fallback_blocks,
             runtime_states=[],
         )
 
@@ -364,6 +418,71 @@ def run_generated_test_through_tracer_and_analyze(
         blocks=block_infos,
         runtime_states=runtime_states,
     )
+
+
+def build_static_cfg_from_blocks(
+    blocks: Sequence[BasicBlock],
+    sources: Sequence[Dict[str, str]] | None = None,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Build a static CFG representation (nodes + edges) without requiring runtime data.
+
+    Args:
+        blocks: BasicBlock definitions describing the CFG.
+        sources: Optional source entries (file_path/code) so we can attach snippets.
+
+    Returns:
+        Dict with `nodes` and `edges` lists that match the frontend's expectations.
+    """
+
+    block_lookup = (
+        _build_block_info_lookup(blocks, sources or [])
+        if sources is not None
+        else {block.block_id: BlockInfo(id=block.block_id, code="", file_path=block.file_path,
+                                        start_line=block.start_line, end_line=block.end_line) for block in blocks}
+    )
+
+    nodes: List[Dict[str, Any]] = []
+    for block in blocks:
+        block_info = block_lookup.get(block.block_id)
+        nodes.append(
+            {
+                "id": block.block_id,
+                "type": "cfgNode",
+                "position": {"x": 0, "y": 0},
+                "data": {
+                    "blockId": block.block_id,
+                    "blockName": block.block_id,
+                    "codeSnippet": block_info.code if block_info else "",
+                    "status": "pending",
+                    "file": block.file_path,
+                    "lineStart": block.start_line,
+                    "lineEnd": block.end_line,
+                    "executionCount": 0,
+                },
+            }
+        )
+
+    edges: List[Dict[str, Any]] = []
+    prev_block_for_file: Dict[str, str] = {}
+    sorted_blocks = sorted(
+        blocks,
+        key=lambda block: ((block.file_path or ""), block.start_line or 0),
+    )
+    for block in sorted_blocks:
+        file_path = block.file_path or ""
+        prev_block = prev_block_for_file.get(file_path)
+        if prev_block:
+            edges.append(
+                {
+                    "id": f"edge-{prev_block}-{block.block_id}",
+                    "source": prev_block,
+                    "target": block.block_id,
+                }
+            )
+        prev_block_for_file[file_path] = block.block_id
+
+    return {"nodes": nodes, "edges": edges}
 
 
 def build_debugger_ui_payload(run_result: LlmDebugRunResult) -> Dict[str, object]:
@@ -434,9 +553,12 @@ def build_debugger_ui_payload(run_result: LlmDebugRunResult) -> Dict[str, object
     for step in steps:
         execution_counts[step["blockId"]] = execution_counts.get(step["blockId"], 0) + 1
 
+    has_runtime_steps = len(steps) > 0
     nodes: List[Dict[str, Any]] = []
     for block in run_result.blocks:
         block_id = block.id
+        default_status = "succeeded" if has_runtime_steps else "pending"
+        node_status = "failed" if block_id in incorrect_blocks else default_status
         nodes.append(
             {
                 "id": block_id,
@@ -446,7 +568,7 @@ def build_debugger_ui_payload(run_result: LlmDebugRunResult) -> Dict[str, object
                     "blockId": block_id,
                     "blockName": block_id,
                     "codeSnippet": block.code,
-                    "status": "failed" if block_id in incorrect_blocks else "succeeded",
+                    "status": node_status,
                     "file": block.file_path,
                     "lineStart": block.start_line,
                     "lineEnd": block.end_line,

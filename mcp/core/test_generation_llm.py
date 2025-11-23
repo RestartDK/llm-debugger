@@ -59,7 +59,8 @@ Goals:
 1. Infer realistic inputs and outputs directly from the code (no domain assumptions).
 2. Cover normal flow plus edge cases (empty inputs, error paths, boundary values).
 3. Produce deterministic tests with explicit assertions.
-4. Return data that strictly matches the JSON schema:
+4. Each test case MUST invoke the target function explicitly, assign the call to a variable named `result` (e.g., `result = my_func(...)`), and assert on `result` (or its fields) right after.
+5. Return data that strictly matches the JSON schema:
    {{
      "target_function": "...",
      "summary": "...",
@@ -78,6 +79,7 @@ Goals:
 Rules:
 - Prefer pytest-style parametrization when it reduces duplication.
 - Avoid pseudo-code, return concrete Python snippets where relevant.
+- Do not reference variables that were never defined (e.g., always define `result` before using it).
 - If multiple helper functions are present, clarify which one each test targets.
 """
     return dedent(prompt).strip()
