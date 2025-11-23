@@ -1,7 +1,6 @@
 import React from 'react';
 import type { TestSuite, TestCase } from '@/lib/types';
 import { ChevronDown, ChevronRight, TestTube, FileText } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 interface TestInfoProps {
   suite?: TestSuite;
