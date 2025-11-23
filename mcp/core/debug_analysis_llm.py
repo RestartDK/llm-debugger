@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import sys
 import traceback
 from typing import Dict, List, Optional, Sequence
@@ -186,6 +187,14 @@ def analyze_failed_test(
         failed_test=failed_test,
     )
     try:
+        # Log Groq call location for debugging tool_use_failed errors
+        stack = inspect.stack()
+        caller_frame = stack[0]  # Current frame (this logging line)
+        # Get the actual line number where run_sync is called (next line)
+        call_line = caller_frame.lineno + 1
+        test_name = failed_test.name or "unnamed"
+        caller_info = f"File: {__file__}, Line: {call_line}, Function: {caller_frame.function}, Output Type: structured (DebugAnalysis), Test: {test_name}"
+        print(f"[groq_call] {caller_info}", file=sys.stderr)
         run_result = agent.run_sync(prompt, output_type=DebugAnalysis)
         return run_result.output
     except Exception as e:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import re
 import sys
 import traceback
@@ -132,6 +133,13 @@ def generate_test_code_only(
     """
     prompt = build_test_code_prompt(code_snippet, context)
     try:
+        # Log Groq call location for debugging tool_use_failed errors
+        stack = inspect.stack()
+        caller_frame = stack[0]  # Current frame (this logging line)
+        # Get the actual line number where run_sync is called (next line)
+        call_line = caller_frame.lineno + 1
+        caller_info = f"File: {__file__}, Line: {call_line}, Function: {caller_frame.function}, Output Type: unstructured (text only)"
+        print(f"[groq_call] {caller_info}", file=sys.stderr)
         run_result = agent.run_sync(prompt)  # No output_type - just text generation
         test_code = run_result.output
         
@@ -235,6 +243,13 @@ def extract_test_metadata(
         generated_test_code, original_code_snippet, target_function
     )
     try:
+        # Log Groq call location for debugging tool_use_failed errors
+        stack = inspect.stack()
+        caller_frame = stack[0]  # Current frame (this logging line)
+        # Get the actual line number where run_sync is called (next line)
+        call_line = caller_frame.lineno + 1
+        caller_info = f"File: {__file__}, Line: {call_line}, Function: {caller_frame.function}, Output Type: structured (GeneratedTestSuite)"
+        print(f"[groq_call] {caller_info}", file=sys.stderr)
         run_result = agent.run_sync(prompt, output_type=GeneratedTestSuite)
         suite = run_result.output
         

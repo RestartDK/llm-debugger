@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import os
 import sys
 import traceback
@@ -861,6 +862,13 @@ def generate_fix_instructions(
         task_description=task_description,
     )
     try:
+        # Log Groq call location for debugging tool_use_failed errors
+        stack = inspect.stack()
+        caller_frame = stack[0]  # Current frame (this logging line)
+        # Get the actual line number where run_sync is called (next line)
+        call_line = caller_frame.lineno + 1
+        caller_info = f"File: {__file__}, Line: {call_line}, Function: {caller_frame.function}, Output Type: unstructured (text only)"
+        print(f"[groq_call] {caller_info}", file=sys.stderr)
         run_result = agent.run_sync(prompt)  # Text output, not structured
         instructions = run_result.output
         print(f"[orchestrator] Generated fix instructions ({len(instructions)} chars)", file=sys.stderr)
@@ -884,7 +892,7 @@ def generate_instruction_file_from_test_results(
     test_results: List[LlmDebugRunResult],
     original_sources: Sequence[Dict[str, str]],
     task_description: str,
-    output_dir: str = "instructions",
+    output_dir: str = "instructions",  # Matches debug_fix_instructions.py default
 ) -> str:
     """
     Generate instruction file from test results.
@@ -984,19 +992,40 @@ If you need more context from a file, request it before editing.
 {instructions_text}
 """
     
-    # Ensure output directory exists (same as send_debugger_response)
+    # Ensure output directory exists (same pattern as send_debugger_response in debug_fix_instructions.py)
+    print(f"[orchestrator] Ensuring output directory exists: {output_dir}", file=sys.stderr)
     os.makedirs(output_dir, exist_ok=True)
+    if os.path.exists(output_dir):
+        print(f"[orchestrator] Output directory verified: {output_dir}", file=sys.stderr)
+    else:
+        print(f"[orchestrator] ERROR: Output directory does not exist after creation: {output_dir}", file=sys.stderr)
     
-    # Generate filename with timestamp (same format as send_debugger_response: YYYY-MM-DD_HH-MM.txt)
+    # Generate filename with timestamp (exact same format as debug_fix_instructions.py: YYYY-MM-DD_HH-MM.txt)
+    # Matches: timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M") and filename = f"{timestamp}.txt"
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
     filename = f"{timestamp}.txt"
     filepath = os.path.join(output_dir, filename)
+    print(f"[orchestrator] Generated instruction file path: {filepath}", file=sys.stderr)
+    print(f"[orchestrator] Instruction file content length: {len(instruction_file_content)} characters", file=sys.stderr)
     
     # Write instruction file (same pattern as send_debugger_response)
-    with open(filepath, 'w') as f:
-        f.write(instruction_file_content)
+    try:
+        print(f"[orchestrator] Opening file for writing: {filepath}", file=sys.stderr)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            bytes_written = f.write(instruction_file_content)
+            print(f"[orchestrator] Wrote {bytes_written} characters to file", file=sys.stderr)
+        
+        # Verify file was written
+        if os.path.exists(filepath):
+            file_size = os.path.getsize(filepath)
+            print(f"[orchestrator] Instruction file saved successfully: {filepath} (size: {file_size} bytes)", file=sys.stderr)
+        else:
+            print(f"[orchestrator] ERROR: File does not exist after write: {filepath}", file=sys.stderr)
+    except Exception as e:
+        print(f"[orchestrator] ERROR: Failed to write instruction file: {e}", file=sys.stderr)
+        print(f"[orchestrator] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
+        raise
     
-    print(f"[orchestrator] Instruction file saved to: {filepath}", file=sys.stderr)
     return filepath
 
 

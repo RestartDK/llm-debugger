@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import sys
 import traceback
 from textwrap import dedent
@@ -147,6 +148,13 @@ def enhance_source_code(
         prompt = build_enhancement_prompt(code, file_path, file_errors)
         
         try:
+            # Log Groq call location for debugging tool_use_failed errors
+            stack = inspect.stack()
+            caller_frame = stack[0]  # Current frame (this logging line)
+            # Get the actual line number where run_sync is called (next line)
+            call_line = caller_frame.lineno + 1
+            caller_info = f"File: {__file__}, Line: {call_line}, Function: {caller_frame.function}, Output Type: structured (EnhancedSource), File: {file_path}"
+            print(f"[groq_call] {caller_info}", file=sys.stderr)
             run_result = agent.run_sync(prompt, output_type=EnhancedSource)
             enhanced_sources.append(run_result.output)
         except Exception as e:
