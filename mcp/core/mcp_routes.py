@@ -255,19 +255,74 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
         
         # Handle tools/list
         elif method == "tools/list":
+            logger_instance.info(f"tools/list requested - mcp_instance={mcp_instance is not None}")
+            
             # Use FastMCP's tool discovery
-            if mcp_instance and hasattr(mcp_instance, '_tool_manager'):
+            if mcp_instance:
+                # Log all available attributes for debugging
+                logger_instance.info(f"mcp_instance type: {type(mcp_instance)}")
+                logger_instance.info(f"mcp_instance has _tool_manager: {hasattr(mcp_instance, '_tool_manager')}")
+                logger_instance.info(f"mcp_instance has get_tools: {hasattr(mcp_instance, 'get_tools')}")
+                logger_instance.info(f"mcp_instance has list_tools: {hasattr(mcp_instance, 'list_tools')}")
+                
+                # Try multiple ways to get tools
+                tool_dict = {}
+                
+                # Method 1: Check for _tool_manager.tools
+                if hasattr(mcp_instance, '_tool_manager'):
+                    tool_manager = mcp_instance._tool_manager
+                    logger_instance.info(f"Found _tool_manager: {type(tool_manager)}")
+                    if hasattr(tool_manager, 'tools'):
+                        tool_dict = tool_manager.tools
+                        logger_instance.info(f"Found tools in _tool_manager.tools: {len(tool_dict)} tools")
+                    else:
+                        logger_instance.warning(f"_tool_manager exists but has no 'tools' attribute. Available: {[a for a in dir(tool_manager) if not a.startswith('__')]}")
+                
+                # Method 2: Try get_tools() method
+                if not tool_dict and hasattr(mcp_instance, 'get_tools'):
+                    try:
+                        tool_dict = mcp_instance.get_tools()
+                        logger_instance.info(f"Found tools via get_tools(): {len(tool_dict) if isinstance(tool_dict, dict) else 'not a dict'}")
+                    except Exception as e:
+                        logger_instance.warning(f"get_tools() failed: {e}")
+                
+                # Method 3: Try list_tools() method (might return MCP-formatted tools)
+                tools_list_mcp_format = None
+                if not tool_dict and hasattr(mcp_instance, 'list_tools'):
+                    try:
+                        tools_list_mcp_format = mcp_instance.list_tools()
+                        logger_instance.info(f"Found tools via list_tools(): {len(tools_list_mcp_format) if isinstance(tools_list_mcp_format, list) else 'not a list'}")
+                        # If it's already in MCP format (list of dicts with 'name', 'description', 'inputSchema')
+                        if isinstance(tools_list_mcp_format, list) and len(tools_list_mcp_format) > 0:
+                            # Check if first item looks like MCP format
+                            if isinstance(tools_list_mcp_format[0], dict) and 'name' in tools_list_mcp_format[0] and 'inputSchema' in tools_list_mcp_format[0]:
+                                logger_instance.info("list_tools() returned MCP-formatted tools, using directly")
+                                return {
+                                    "jsonrpc": "2.0",
+                                    "id": request_id,
+                                    "result": {
+                                        "tools": tools_list_mcp_format
+                                    }
+                                }
+                            else:
+                                # Convert list to dict for processing
+                                tool_dict = {tool.get('name', f'tool_{i}'): tool for i, tool in enumerate(tools_list_mcp_format)}
+                    except Exception as e:
+                        logger_instance.warning(f"list_tools() failed: {e}")
+                
+                if not tool_dict:
+                    logger_instance.error("No tools found via any method. Available mcp_instance attributes: " + 
+                                        str([a for a in dir(mcp_instance) if not a.startswith('__')]))
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "error": {"code": -32603, "message": "FastMCP tool discovery not available - no tools found"}
+                    }
+                
                 import inspect
                 tools = []
-                tool_manager = mcp_instance._tool_manager
                 
-                # Get tools from tool manager
-                tool_dict = {}
-                if hasattr(tool_manager, 'tools'):
-                    tool_dict = tool_manager.tools
-                elif hasattr(mcp_instance, 'get_tools'):
-                    tool_dict = mcp_instance.get_tools()
-                
+                logger_instance.info(f"Processing {len(tool_dict)} tools from tool_dict")
                 for tool_name, tool_obj in tool_dict.items():
                     # Extract underlying function from FunctionTool wrapper
                     tool_func = tool_obj
@@ -348,11 +403,42 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
                     }
                 }
             else:
-                logger_instance.error("FastMCP tool discovery not available")
+                logger_instance.error(f"FastMCP tool discovery not available - mcp_instance is None or missing")
+                logger_instance.error(f"mcp_instance type: {type(mcp_instance) if mcp_instance else 'None'}")
+                
+                # Fallback: Return manually defined tools if FastMCP discovery fails
+                # This is a temporary fallback to ensure tools are available while debugging
+                logger_instance.warning("Using fallback tool list - FastMCP discovery failed")
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,
-                    "error": {"code": -32603, "message": "FastMCP tool discovery not available"}
+                    "result": {
+                        "tools": [
+                            {
+                                "name": "submit_code_context_mcp",
+                                "description": "Submit potential bug areas from codebase analysis. REQUIRES MULTIPLE CODE CHUNKS in sequence, each with ACTUAL CODE BLOCKS (5-10 lines), not English descriptions.",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "text": {
+                                            "type": "string",
+                                            "description": "Raw text payload containing code chunks with format: [Code Chunk N], File, Lines, [Explanation], [Relationships]. See tool description for full format requirements."
+                                        }
+                                    },
+                                    "required": ["text"]
+                                }
+                            },
+                            {
+                                "name": "fetch_instructions_from_debugger",
+                                "description": "Fetch debugger fix instructions that have been generated by the debugging pipeline.",
+                                "inputSchema": {
+                                    "type": "object",
+                                    "properties": {},
+                                    "required": []
+                                }
+                            }
+                        ]
+                    }
                 }
         
         # Handle initialized notification (no response needed)
