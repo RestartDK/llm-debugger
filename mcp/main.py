@@ -7,7 +7,6 @@ import asyncio
 import json
 import logging
 import uuid
-from pathlib import Path
 from typing import Dict
 
 from fastapi import FastAPI, Request
@@ -23,16 +22,7 @@ logger = logging.getLogger(__name__)
 _active_connections: Dict[str, asyncio.Queue] = {}
 
 # Hardcoded control-flow graph response (TODO: revert to dynamic generation)
-CODE_GRAPH_PATH = Path(__file__).resolve().parent / "code_graph_output.json"
-try:
-    with CODE_GRAPH_PATH.open("r", encoding="utf-8") as f:
-        HARDCODED_CODE_GRAPH = json.load(f)
-except FileNotFoundError:
-    logger.warning("code_graph_output.json not found at %s", CODE_GRAPH_PATH)
-    HARDCODED_CODE_GRAPH = {
-        "status": "error",
-        "message": "code_graph_output.json not found.",
-    }
+# Payload is stored in dummy_cfg.HARDCODED_CODE_GRAPH so deployments do not rely on copying a JSON file.
 
 # Import from core package
 from core import (
@@ -40,6 +30,7 @@ from core import (
     submit_code_context
 )
 from core.create_ctrlflow_json import generate_code_graph_from_context
+from dummy_cfg import HARDCODED_CODE_GRAPH
 
 # Import from api package
 from api import (
@@ -249,6 +240,12 @@ async def root():
             "sse_message": "/sse/message"
         }
     }
+
+
+@app.head("/")
+async def root_head():
+    """HEAD variant of root endpoint for health checks."""
+    return JSONResponse(status_code=200, content=None)
 
 
 @app.get("/health")
