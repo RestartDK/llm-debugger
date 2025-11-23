@@ -43,6 +43,7 @@ function App() {
   const [testCase, setTestCase] = useState<TestCase | undefined>(undefined);
   const [analysis, setAnalysis] = useState<Analysis | undefined>(undefined);
   const [attempts, setAttempts] = useState<ExecutionAttempt[] | undefined>(undefined);
+  const [finalAnalysis, setFinalAnalysis] = useState<string | undefined>(undefined);
 
   const leftPanelRef = useRef<ImperativePanelHandle>(null);
   
@@ -111,6 +112,7 @@ function App() {
     setTestCase(payload.test_case);
     setAnalysis(payload.analysis);
     setAttempts(payload.attempts);
+    setFinalAnalysis(payload.final_analysis);
 
     setNodes((prev) => mergeNodesWithAnalysis(prev, payload.nodes));
 
@@ -291,17 +293,18 @@ function App() {
           onExpand={() => setIsSidebarCollapsed(false)}
           className={isSidebarCollapsed ? "min-w-0 transition-all duration-300 ease-in-out" : "transition-all duration-300 ease-in-out"}
         >
-          <LeftPanel
-            steps={steps}
-            problems={problems}
-            activeStepId={activeStepId}
-            onStepSelect={handleStepSelect}
-            isCollapsed={isSidebarCollapsed}
-            suite={suite}
-            testCase={testCase}
-            analysis={analysis}
-            attempts={attempts}
-          />
+            <LeftPanel
+              steps={steps}
+              problems={problems}
+              activeStepId={activeStepId}
+              onStepSelect={handleStepSelect}
+              isCollapsed={isSidebarCollapsed}
+              suite={suite}
+              testCase={testCase}
+              analysis={analysis}
+              attempts={attempts}
+              finalAnalysis={finalAnalysis}
+            />
         </ResizablePanel>
 
         <ResizableHandle withHandle={!isSidebarCollapsed} />

@@ -31,6 +31,7 @@ from textwrap import dedent as _dedent
 import asyncio
 from . import mcp_routes
 from pydantic_ai import Agent
+import requests
 
 
 def render_generated_test_case_to_python(
@@ -178,6 +179,7 @@ class LlmDebugRunResult:
     blocks: List[BlockInfo]
     runtime_states: List[RuntimeStateSnapshot]
     attempts: List[ExecutionAttempt]
+    final_analysis: Optional[str] = None  # Final analysis text from Groq API
 
 def apply_suggested_fixes_to_source(
     
@@ -577,6 +579,14 @@ def run_generated_test_through_tracer_and_analyze(
             ) 
 
     # --- End of loop ---
+    
+    # Generate final analysis from all attempts
+    print(f"[orchestrator] Generating final analysis from {len(attempts_history)} attempts...", file=sys.stderr)
+    final_analysis_text = generate_final_analysis_from_attempts(
+        attempts=attempts_history,
+        test_case=test_case,
+        task_description=task_description,
+    )
 
     # Prepare final results based on the last attempt (or successful one)
     trace_entries = final_trace_payload.get("trace", []) or []
@@ -692,6 +702,7 @@ def run_generated_test_through_tracer_and_analyze(
             blocks=fallback_blocks,
             runtime_states=[],
             attempts=attempts_history,
+            final_analysis=final_analysis_text,
         )
 
     actual_description = (
@@ -724,7 +735,7 @@ def run_generated_test_through_tracer_and_analyze(
         failed_test=failed_test,
     )
 
-    return LlmDebugRunResult(
+    result = LlmDebugRunResult(
         suite=suite,
         test_case=test_case,
         trace_payload=final_trace_payload,
@@ -732,7 +743,26 @@ def run_generated_test_through_tracer_and_analyze(
         blocks=block_infos,
         runtime_states=runtime_states,
         attempts=attempts_history,
+        final_analysis=final_analysis_text,
     )
+    
+    # Always generate instruction file (even for single test runs)
+    print(f"[orchestrator] Generating instruction file for single test run...", file=sys.stderr)
+    try:
+        original_sources = list(source_entries) if source_entries else get_dummy_sources()
+        instruction_filepath = generate_instruction_file_from_test_results(
+            agent=agent,
+            test_results=[result],  # Single test result
+            original_sources=original_sources,
+            task_description=task_description,
+        )
+        print(f"[orchestrator] Instruction file generated: {instruction_filepath}", file=sys.stderr)
+    except Exception as e:
+        print(f"[orchestrator] WARNING: Failed to generate instruction file: {e}", file=sys.stderr)
+        print(f"[orchestrator] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
+        # Continue even if instruction file generation fails
+    
+    return result
 
 
 def run_all_tests_through_tracer_and_analyze(
@@ -830,6 +860,136 @@ def run_all_tests_through_tracer_and_analyze(
     
     print(f"[orchestrator] Completed execution of {len(results)} tests", file=sys.stderr)
     return results
+
+
+def generate_final_analysis_from_attempts(
+    attempts: List[ExecutionAttempt],
+    test_case: GeneratedTestCase,
+    task_description: str,
+) -> str:
+    """
+    Generate final analysis from execution attempts using direct Groq API calls.
+    
+    Args:
+        attempts: List of execution attempts with command, stdout, stderr, returncode
+        test_case: The test case that was executed
+        task_description: Task description for context
+        
+    Returns:
+        Final analysis text from Groq API
+    """
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        print("[orchestrator] ERROR: GROQ_API_KEY not set, cannot generate final analysis", file=sys.stderr)
+        return "[Final Analysis]\nError: GROQ_API_KEY environment variable not set."
+    
+    # Build summary of attempts
+    attempts_summary = []
+    for attempt in attempts:
+        attempt_info = f"""
+Attempt {attempt.attempt_number}:
+- Status: {attempt.status}
+- Error Summary: {attempt.error_summary or 'N/A'}
+- Reasoning: {attempt.reasoning or 'N/A'}
+- Return Code: {attempt.returncode or 'N/A'}
+"""
+        if attempt.command:
+            attempt_info += f"- Command Preview: {attempt.command[:200]}...\n"
+        if attempt.stdout:
+            attempt_info += f"- Stdout: {attempt.stdout[:500]}...\n"
+        if attempt.stderr:
+            attempt_info += f"- Stderr: {attempt.stderr[:500]}...\n"
+        attempts_summary.append(attempt_info)
+    
+    # Determine success/failure
+    successful_attempts = [a for a in attempts if a.status == "success"]
+    failed_attempts = [a for a in attempts if a.status == "error"]
+    
+    prompt = f"""
+You are analyzing test execution results to provide a final analysis and summary.
+
+[Task Description]
+{task_description}
+
+[Test Case]
+Name: {test_case.name}
+Description: {test_case.description}
+Input: {test_case.input[:500]}
+Expected Output: {test_case.expected_output[:500]}
+
+[Execution Summary]
+Total Attempts: {len(attempts)}
+Successful Attempts: {len(successful_attempts)}
+Failed Attempts: {len(failed_attempts)}
+
+[Execution Attempts]
+{chr(10).join(attempts_summary)}
+
+Your task: Generate a comprehensive final analysis that includes:
+
+1. **Test Execution Summary**
+   - Overall outcome (passed/failed)
+   - Number of attempts needed
+   - Key milestones in the debugging process
+
+2. **What Worked**
+   - Successful fixes that were applied
+   - Patterns that led to success
+   - Key insights from successful attempts
+
+3. **What Failed**
+   - Common failure patterns
+   - Errors encountered and their causes
+   - What didn't work and why
+
+4. **Lessons Learned**
+   - Key takeaways from the execution
+   - Important patterns or anti-patterns discovered
+   - Recommendations for similar code
+
+5. **Final Status**
+   - Whether the test ultimately passed or failed
+   - If passed: what made it work
+   - If failed: what still needs to be fixed
+
+Format your response as clear, structured text with sections and bullet points.
+Keep it concise but comprehensive.
+"""
+    
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "model": "openai/gpt-oss-120b",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "max_completion_tokens": 2048,
+        "top_p": 1.0,
+        "stream": False,
+    }
+    
+    try:
+        print(f"[orchestrator] Calling Groq API for final analysis (test: {test_case.name})...", file=sys.stderr)
+        response = requests.post(url, headers=headers, json=data, timeout=30.0)
+        response.raise_for_status()
+        result = response.json()
+        text = result["choices"][0]["message"]["content"]
+        print(f"[orchestrator] Generated final analysis ({len(text)} chars)", file=sys.stderr)
+        return text
+    except Exception as e:
+        error_type = type(e).__name__
+        error_msg = str(e)
+        print(f"[groq_error] Function: generate_final_analysis_from_attempts, Error Type: {error_type}, Message: {error_msg}", file=sys.stderr)
+        if hasattr(e, 'status_code'):
+            print(f"[groq_error] HTTP Status: {e.status_code}", file=sys.stderr)
+        if hasattr(e, 'response'):
+            print(f"[groq_error] Response: {e.response}", file=sys.stderr)
+        print(f"[groq_error] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
+        return f"[Final Analysis]\nError generating analysis: {error_msg}\n\nPlease review the execution attempts manually."
 
 
 def build_fix_instruction_prompt(
@@ -1042,6 +1202,12 @@ def generate_instruction_file_from_test_results(
         task_description=task_description,
     )
     
+    # Collect final analyses from all test results
+    final_analyses = []
+    for result in test_results:
+        if result.final_analysis:
+            final_analyses.append(f"[Final Analysis for Test: {result.test_case.name}]\n{result.final_analysis}\n")
+    
     # Build instruction content following send_debugger_response pattern
     # Get task description in the same format as send_debugger_response
     task_description_section = f"""
@@ -1094,6 +1260,9 @@ If you need more context from a file, request it before editing.
 
 [Execution History]
 {chr(10).join(f"Attempt {attempt.attempt_number}: {attempt.reasoning or attempt.error_summary or 'N/A'}" for result in failed_tests for attempt in result.attempts) if failed_tests else "No execution history."}
+
+[Final Analysis]
+{chr(10).join(f"[Final Analysis for Test: {result.test_case.name}]\n{result.final_analysis}\n" for result in test_results if result.final_analysis) if any(result.final_analysis for result in test_results) else "No final analysis available."}
 
 {instructions_text}
 """
@@ -1322,4 +1491,5 @@ def build_debugger_ui_payload(run_result: LlmDebugRunResult) -> Dict[str, object
         "edges": edges,
         "analysis": run_result.debug_analysis.model_dump(),
         "attempts": [a.to_dict() for a in run_result.attempts],
+        "final_analysis": run_result.final_analysis,
     }

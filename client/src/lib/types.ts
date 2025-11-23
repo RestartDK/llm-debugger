@@ -105,6 +105,7 @@ export interface DebuggerPayload extends ControlFlowResponse {
   problems: Problem[];
   analysis?: Analysis;
   attempts?: ExecutionAttempt[];
+  final_analysis?: string;
 }
 
 export interface ExecuteTestCasesRequest {

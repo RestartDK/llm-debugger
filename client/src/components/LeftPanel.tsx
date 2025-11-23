@@ -1,6 +1,6 @@
 import React from 'react';
 import type { RuntimeStep, Problem, TestSuite, TestCase, Analysis, ExecutionAttempt } from '@/lib/types';
-import { RuntimeInspector } from './RuntimeInspector';
+import { FinalAnalysis } from './FinalAnalysis';
 import { ProblemsList } from './ProblemsList';
 import { TestInfo } from './TestInfo';
 import { AnalysisDisplay } from './AnalysisDisplay';
@@ -21,6 +21,7 @@ interface LeftPanelProps {
   testCase?: TestCase;
   analysis?: Analysis;
   attempts?: ExecutionAttempt[];
+  finalAnalysis?: string;
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
@@ -33,6 +34,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   testCase,
   analysis,
   attempts,
+  finalAnalysis,
 }) => {
   // If collapsed, we hide the content entirely (width is handled by parent ResizablePanel collapsedSize=0)
   if (isCollapsed) {
@@ -54,15 +56,15 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
         </div>
       )}
       
-      {/* Runtime Inspector and Problems below */}
+      {/* Final Analysis and Problems below */}
       <div className="flex-1 min-h-0">
         <ResizablePanelGroup direction="vertical">
           <ResizablePanel defaultSize={70} minSize={30}>
-            <RuntimeInspector
-              steps={steps}
-              activeStepId={activeStepId}
-              onStepSelect={onStepSelect}
-              problems={problems}
+            <FinalAnalysis
+              finalAnalysis={finalAnalysis}
+              attempts={attempts}
+              suite={suite}
+              testCase={testCase}
             />
           </ResizablePanel>
           
