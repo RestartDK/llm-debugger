@@ -60,7 +60,7 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
             # If conversion failed, fall back to dummy blocks
             blocks = get_dummy_blocks()
     else:
-    blocks = get_dummy_blocks()
+        blocks = get_dummy_blocks()
 
     agent = LlmDebugAgent()
     run_result = run_generated_test_through_tracer_and_analyze(
