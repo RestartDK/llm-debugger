@@ -3,20 +3,39 @@ MCP Debug Context Server
 Accepts code changes from Cursor, stores project context and code chunk debugging information.
 Can be run as an MCP server (stdio) or as a FastAPI HTTP server with SSE support.
 """
-import logging
 import asyncio
 import json
+import logging
+import uuid
+from pathlib import Path
+from typing import Dict
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastmcp import FastMCP, Context
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Track active SSE connections (connection_id -> asyncio.Queue)
+_active_connections: Dict[str, asyncio.Queue] = {}
+
+# Hardcoded control-flow graph response (TODO: revert to dynamic generation)
+CODE_GRAPH_PATH = Path(__file__).resolve().parent / "code_graph_output.json"
+try:
+    with CODE_GRAPH_PATH.open("r", encoding="utf-8") as f:
+        HARDCODED_CODE_GRAPH = json.load(f)
+except FileNotFoundError:
+    logger.warning("code_graph_output.json not found at %s", CODE_GRAPH_PATH)
+    HARDCODED_CODE_GRAPH = {
+        "status": "error",
+        "message": "code_graph_output.json not found.",
+    }
+
 # Import from core package
 from core import (
-    sse_endpoint_handler,
     sse_message_handler,
     submit_code_context
 )
@@ -240,14 +259,13 @@ async def health():
 
 @app.get("/get_control_flow_diagram")
 async def get_control_flow_diagram_endpoint():
-    """Get control flow diagram data."""
-    try:
-        result = get_control_flow_diagram()
-        logger.info(f"GET /get_control_flow_diagram - Response: {result}")
-        return result
-    except Exception as e:
-        logger.error(f"GET /get_control_flow_diagram - Error: {str(e)}")
-        return {"error": str(e)}
+    """Return the latest control-flow graph snapshot.
+    
+    TODO: Replace this hardcoded payload with a fresh call to
+    get_control_flow_diagram() once the dynamic generation pipeline is ready.
+    """
+    logger.info("GET /get_control_flow_diagram - Returning hardcoded payload")
+    return HARDCODED_CODE_GRAPH
 
 
 @app.post("/execute_test_cases")
@@ -279,26 +297,68 @@ async def send_debugger_response_endpoint(request: Request):
 
 
 # ============================================================================
-# MCP Protocol Routes (SSE)
+# MCP Protocol - SSE transport
 # ============================================================================
 
 @app.get("/sse")
-async def sse_endpoint(request: Request):
-    """SSE endpoint for MCP protocol over HTTP (GET for SSE stream)."""
-    return await sse_endpoint_handler(request)
+async def sse_stream(request: Request):
+    """Establish an SSE stream and return a connection_id."""
+    connection_id = uuid.uuid4().hex
+    logger.info("New SSE connection: %s", connection_id)
+    queue: asyncio.Queue = asyncio.Queue()
+    _active_connections[connection_id] = queue
+
+    async def event_generator():
+        # Initial event so clients learn the connection_id
+        yield (
+            "event: mcp-connection\n"
+            f"data: {json.dumps({'connection_id': connection_id})}\n\n"
+        )
+        try:
+            while True:
+                message = await queue.get()
+                yield f"data: {json.dumps(message)}\n\n"
+        except asyncio.CancelledError:
+            logger.info("SSE connection %s cancelled by client", connection_id)
+        finally:
+            _active_connections.pop(connection_id, None)
+            logger.info("SSE connection %s cleaned up", connection_id)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
+        "X-Connection-ID": connection_id,
+    }
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
 
 
-@app.post("/sse")
-async def sse_post_endpoint(request: Request):
-    """Handle POST requests to /sse endpoint (Cursor may POST here for messages)."""
-    # Forward POST requests to the message handler
-    return await sse_message_handler(request, mcp_instance=mcp)
+@app.post("/sse/message")
+async def sse_message(request: Request):
+    """Handle MCP JSON-RPC messages sent over HTTP and echo them to the SSE stream."""
+    payload = await request.json()
+    connection_id = payload.get("connection_id")
+    if not connection_id:
+        logger.warning("SSE message received without connection_id: %s", payload)
+        return JSONResponse({"error": "missing connection_id"}, status_code=400)
+
+    queue = _active_connections.get(connection_id)
+    if queue is None:
+        logger.warning("SSE message for unknown connection_id: %s", connection_id)
+        return JSONResponse({"error": "unknown connection_id"}, status_code=400)
+
+    result = await sse_message_handler(request, mcp_instance=mcp)
+    await queue.put(result)
+    return JSONResponse({"status": "ok"})
 
 
 @app.options("/sse")
 async def sse_options():
-    """Handle CORS preflight for SSE endpoint."""
     from fastapi.responses import Response
+
     return Response(
         headers={
             "Access-Control-Allow-Origin": "*",
@@ -307,10 +367,11 @@ async def sse_options():
         }
     )
 
+
 @app.options("/sse/message")
 async def sse_message_options():
-    """Handle CORS preflight for SSE message endpoint."""
     from fastapi.responses import Response
+
     return Response(
         headers={
             "Access-Control-Allow-Origin": "*",
@@ -319,20 +380,11 @@ async def sse_message_options():
         }
     )
 
-@app.post("/sse/message")
-async def sse_message_endpoint(request: Request):
-    """Handle POST requests for MCP protocol messages.
-    
-    For SSE transport: responses are queued and sent via the SSE stream.
-    For direct HTTP: responses are returned directly.
-    """
-    return await sse_message_handler(request, mcp_instance=mcp)
-
 
 if __name__ == "__main__":
     import sys
     import uvicorn
-    
+
     # Check if running in stdio mode (for MCP) or HTTP mode
     # If stdin is a TTY, run HTTP server; otherwise run stdio MCP server
     if sys.stdin.isatty():
