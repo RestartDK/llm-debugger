@@ -1,0 +1,86 @@
+[Code Chunk 1]
+File: src/utils.py
+Lines: 15-24
+
+def process_data(items):
+    result = []
+    for item in items:
+        if item is None:
+            continue
+        result.append(item * 2)
+    return result
+
+[Explanation]
+This function doesn't handle the case where items is None or empty, which could cause a TypeError when iterating. Code Chunk 2 (calculate_totals) is problematic because it calls this function without checking if data is None first. Code Chunk 3 (API handler) looks good as it validates input before calling calculate_totals.
+
+[Relationships]
+This function is called by calculate_totals() function (see Code Chunk 2). The result is used by the API handler in Code Chunk 3. Receives data from the request processing pipeline.
+
+Related code from Code Chunk 2:
+File: src/calculations.py
+Lines: 8-12
+def calculate_totals(data):
+    processed = process_data(data)
+    return sum(processed)
+
+[Code Chunk 2]
+File: src/calculations.py
+Lines: 8-12
+
+def calculate_totals(data):
+    processed = process_data(data)
+    return sum(processed)
+
+[Explanation]
+This function calls process_data() without validating that data is None first, which will cause a TypeError. Code Chunk 1 (process_data) is problematic because it doesn't handle None input. Code Chunk 3 (API handler) looks good as it validates input.
+
+[Relationships]
+Calls process_data() from Code Chunk 1. Called by API handler in Code Chunk 3. Part of the data processing pipeline.
+
+Related code from Code Chunk 1:
+File: src/utils.py
+Lines: 15-24
+def process_data(items):
+    result = []
+    for item in items:
+        if item is None:
+            continue
+        result.append(item * 2)
+    return result
+
+Related code from Code Chunk 3:
+File: src/api.py
+Lines: 20-25
+@app.post("/api/calculate")
+def api_calculate(request: Request):
+    data = request.json()
+    if data is None:
+        return {"error": "Invalid input"}, 400
+    total = calculate_totals(data)
+    return {"total": total}
+
+[Code Chunk 3]
+File: src/api.py
+Lines: 20-25
+
+@app.post("/api/calculate")
+def api_calculate(request: Request):
+    data = request.json()
+    if data is None:
+        return {"error": "Invalid input"}, 400
+    total = calculate_totals(data)
+    return {"total": total}
+
+[Explanation]
+This API handler correctly validates input before calling calculate_totals(). Code Chunk 1 (process_data) is problematic because it doesn't handle None input. Code Chunk 2 (calculate_totals) is problematic because it doesn't validate input before calling process_data().
+
+[Relationships]
+Calls calculate_totals() from Code Chunk 2. Part of the API request handling pipeline. Validates input before processing.
+
+Related code from Code Chunk 2:
+File: src/calculations.py
+Lines: 8-12
+def calculate_totals(data):
+    processed = process_data(data)
+    return sum(processed)
+

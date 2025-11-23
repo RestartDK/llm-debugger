@@ -1,0 +1,49 @@
+{
+    "nodes": [
+        {
+            "id": "process_data",
+            "code_chunk": "def process_data(items):\n    result = []\n    for item in items:\n        if item is None:\n            continue\n        result.append(item * 2)\n    return result",
+            "explanation": "This function doesn't handle the case where items is None or empty, which could cause a TypeError when iterating.",
+            "relationships": "This function is called by calculate_totals() function. The result is used by the API handler.",
+            "filename": "src/utils.py",
+            "line_range": "15-24"
+        },
+        {
+            "id": "calculate_totals",
+            "code_chunk": "def calculate_totals(data):\n    processed = process_data(data)\n    return sum(processed)",
+            "explanation": "This function calls process_data() without validating that data is None first, which will cause a TypeError.",
+            "relationships": "Calls process_data() from Code Chunk 1. Called by API handler in Code Chunk 3.",
+            "filename": "src/calculations.py",
+            "line_range": "8-12"
+        },
+        {
+            "id": "api_calculate",
+            "code_chunk": "@app.post(\"/api/calculate\")\ndef api_calculate(request: Request):\n    data = request.json()\n    if data is None:\n        return {\"error\": \"Invalid input\"}, 400\n    total = calculate_totals(data)\n    return {\"total\": total}",
+            "explanation": "This API handler correctly validates input before calling calculate_totals().",
+            "relationships": "Calls calculate_totals() from Code Chunk 2. Part of the API request handling pipeline.",
+            "filename": "src/api.py",
+            "line_range": "20-25"
+        }
+    ],
+    "edges": [
+        {
+            "id": "edge-1",
+            "from_node": "process_data",
+            "to_node": "calculate_totals",
+            "relationship_type": "calls"
+        },
+        {
+            "id": "edge-2",
+            "from_node": "calculate_totals",
+            "to_node": "api_calculate",
+            "relationship_type": "calls"
+        },
+        {
+            "id": "edge-3",
+            "from_node": "process_data",
+            "to_node": "api_calculate",
+            "relationship_type": "uses"
+        }
+    ]
+}
+

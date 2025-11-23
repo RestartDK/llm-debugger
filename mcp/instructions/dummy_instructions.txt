@@ -1,0 +1,66 @@
+Apply suggested fixes to the codebase.
+A separate debugging pipeline has already identified:
+
+Which test cases failed
+The root cause analysis
+Exact file names and line numbers involved
+Proposed minimal fixes
+Relevant diffs, stack traces, and context
+Your job is to apply only the changes required to fix the issues, following these rules:
+
+1. Editing Rules
+
+Modify only files explicitly listed in the input.
+For each file, apply the changes inside the input.
+If a patch is ambiguous, ask for clarification instead of guessing.
+Do not rewrite entire files unless the patch requires it.
+Preserve formatting, imports, comments, and style of the existing codebase.
+Never introduce new dependencies unless the patch explicitly instructs it.
+
+2. Consistency Rules
+
+Ensure all changes type-check and satisfy the project's conventions.
+Ensure each fix is coherent with the runtime trace and failing test behavior.
+If a patch interacts with a function called across multiple files, verify cross-file compatibility.
+If removing or refactoring code, ensure references and calls remain valid.
+
+3. Safety Rules
+
+Do not create new files unless explicitly instructed.
+Do not delete or rename files unless explicitly instructed.
+Avoid speculative changes; stay strictly within the proposed patches.
+If you need more context from a file, request it before editing.
+
+[Code Chunk]
+File: src/utils.py
+Lines: 15-24
+
+Changed:
+def process_data(items):
+    result = []
+    for item in items:
+        if item is None:
+            continue
+        result.append(item * 2)
+    return result
+
+To:
+def process_data(items):
+    if items is None:
+        return []
+    result = []
+    for item in items:
+        if item is None:
+            continue
+        result.append(item * 2)
+    return result
+
+[Explanation]
+Added None check at the beginning of the function to prevent TypeError when items is None. This ensures the function handles None input gracefully by returning an empty list instead of attempting to iterate over None.
+
+[Relationships]
+This change relates to:
+- src/calculations.py: The calculate_totals function calls this function and will now receive an empty list instead of causing a TypeError
+- src/api.py: The API handler validates input, but this change provides an additional safety layer
+- Test cases: Tests that pass None to process_data will now receive [] instead of raising TypeError
+
