@@ -3,6 +3,7 @@ MCP protocol route handlers (SSE endpoints).
 """
 import json
 import logging
+import inspect
 from fastapi import Request
 from fastapi.responses import StreamingResponse
 import asyncio
@@ -133,7 +134,7 @@ async def sse_endpoint_handler(request: Request) -> StreamingResponse:
                     yield f"data: {json.dumps(response)}\n\n"
                 else:
                     # Send heartbeat every 30 seconds
-                await asyncio.sleep(30)
+                    await asyncio.sleep(30)
                     yield f": heartbeat\n\n"
         except asyncio.CancelledError:
             pass
@@ -244,65 +245,51 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
             tool_name = params.get("name", "")
             tool_args = params.get("arguments", {})
             
-        logger_instance.info(f"Processing tool call: {tool_name} with args keys: {list(tool_args.keys())}")
-        
-        # Try to use FastMCP's tool execution method if available
-        if mcp_instance and hasattr(mcp_instance, '_tool_manager'):
-            tool_manager = mcp_instance._tool_manager
-            # Check if tool exists in tool manager
-            tool_exists = False
-            if hasattr(tool_manager, 'tools') and tool_name in tool_manager.tools:
-                tool_exists = True
-            elif hasattr(mcp_instance, 'get_tool'):
-                tool_obj = mcp_instance.get_tool(tool_name)
-                tool_exists = tool_obj is not None
+            logger_instance.info(f"Processing tool call: {tool_name} with args keys: {list(tool_args.keys())}")
             
-            if tool_exists:
-                logger_instance.info(f"Using FastMCP tool execution for {tool_name}")
-                try:
-                    # Get the tool object from tool manager
-                    tool_obj = None
-                    if hasattr(tool_manager, 'tools') and tool_name in tool_manager.tools:
-                        tool_obj = tool_manager.tools[tool_name]
-                    elif hasattr(mcp_instance, 'get_tool'):
-                        tool_obj = mcp_instance.get_tool(tool_name)
-                    
-                    if tool_obj:
-                        # Extract underlying function from FunctionTool wrapper
-                        tool_func = None
-                        if hasattr(tool_obj, 'fn'):
-                            # FunctionTool wrapper has .fn attribute with the actual function
-                            tool_func = tool_obj.fn
-                        elif hasattr(tool_obj, 'function'):
-                            tool_func = tool_obj.function
-                        elif callable(tool_obj) and not isinstance(tool_obj, type):
-                            # It's already a callable function
-                            tool_func = tool_obj
+                # Try to use FastMCP's tool execution method if available
+            if mcp_instance and hasattr(mcp_instance, '_tool_manager'):
+                tool_manager = mcp_instance._tool_manager
+                # Check if tool exists in tool manager
+                tool_exists = False
+                if hasattr(tool_manager, 'tools') and tool_name in tool_manager.tools:
+                    tool_exists = True
+                elif hasattr(mcp_instance, 'get_tool'):
+                    tool_obj = mcp_instance.get_tool(tool_name)
+                    tool_exists = tool_obj is not None
+                
+                if tool_exists:
+                    logger_instance.info(f"Using FastMCP tool execution for {tool_name}")
+                    try:
+                        # Get the tool object from tool manager
+                        tool_obj = None
+                        if hasattr(tool_manager, 'tools') and tool_name in tool_manager.tools:
+                            tool_obj = tool_manager.tools[tool_name]
+                        elif hasattr(mcp_instance, 'get_tool'):
+                            tool_obj = mcp_instance.get_tool(tool_name)
                         
-                        if tool_func:
-                            logger_instance.info(f"Extracted function from tool wrapper: {tool_func}")
-                            import inspect
-                            # Handle both sync and async functions
-                            if inspect.iscoroutinefunction(tool_func):
-                                logger_instance.info(f"Calling async tool {tool_name}")
-                                result = await tool_func(**tool_args)
-                            else:
-                                logger_instance.info(f"Calling synchronous tool {tool_name} - this will block until complete")
-                                result = tool_func(**tool_args)
-                            logger_instance.info(f"Tool {tool_name} completed with result length: {len(str(result))}")
-                            return {
-                                "jsonrpc": "2.0",
-                                "id": request_id,
-                                "result": {
-                                    "content": [{"type": "text", "text": str(result)}]
-                                }
-                            }
-                        else:
-                            logger_instance.warning(f"Could not extract function from tool wrapper, trying _call_tool_mcp()")
-                            # Fallback: try _call_tool_mcp if available
-                            if hasattr(mcp_instance, '_call_tool_mcp'):
-                                logger_instance.info(f"Calling tool {tool_name} via _call_tool_mcp()")
-                                result = await mcp_instance._call_tool_mcp(tool_name, tool_args)
+                        if tool_obj:
+                            # Extract underlying function from FunctionTool wrapper
+                            tool_func = None
+                            if hasattr(tool_obj, 'fn'):
+                                # FunctionTool wrapper has .fn attribute with the actual function
+                                tool_func = tool_obj.fn
+                            elif hasattr(tool_obj, 'function'):
+                                tool_func = tool_obj.function
+                            elif callable(tool_obj) and not isinstance(tool_obj, type):
+                                # It's already a callable function
+                                tool_func = tool_obj
+                            
+                            if tool_func:
+                                logger_instance.info(f"Extracted function from tool wrapper: {tool_func}")
+                                # Handle both sync and async functions
+                                if inspect.iscoroutinefunction(tool_func):
+                                    logger_instance.info(f"Calling async tool {tool_name}")
+                                    result = await tool_func(**tool_args)
+                                else:
+                                    logger_instance.info(f"Calling synchronous tool {tool_name} - this will block until complete")
+                                    result = tool_func(**tool_args)
+                                logger_instance.info(f"Tool {tool_name} completed with result length: {len(str(result))}")
                                 return {
                                     "jsonrpc": "2.0",
                                     "id": request_id,
@@ -310,87 +297,98 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
                                         "content": [{"type": "text", "text": str(result)}]
                                     }
                                 }
-                    else:
-                        logger_instance.warning(f"Tool object not found, falling back to manual handler")
+                            else:
+                                logger_instance.warning(f"Could not extract function from tool wrapper, trying _call_tool_mcp()")
+                                # Fallback: try _call_tool_mcp if available
+                                if hasattr(mcp_instance, '_call_tool_mcp'):
+                                    logger_instance.info(f"Calling tool {tool_name} via _call_tool_mcp()")
+                                    result = await mcp_instance._call_tool_mcp(tool_name, tool_args)
+                                    return {
+                                        "jsonrpc": "2.0",
+                                        "id": request_id,
+                                        "result": {
+                                            "content": [{"type": "text", "text": str(result)}]
+                                        }
+                                    }
+                        else:
+                            logger_instance.warning(f"Tool object not found, falling back to manual handler")
+                    except Exception as e:
+                        logger_instance.error(f"FastMCP tool execution failed for {tool_name}: {str(e)}", exc_info=True)
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "error": {"code": -32603, "message": f"Tool execution error: {str(e)}"}
+                        }
+            
+            logger_instance.warning(f"FastMCP tool discovery failed for {tool_name}. mcp_instance={mcp_instance is not None}, has_tool_manager={hasattr(mcp_instance, '_tool_manager') if mcp_instance else False}")
+            
+            # Manual tool handling (fallback if FastMCP discovery fails)
+            # Try to use FastMCP's execution method even in fallback
+            if tool_name == "submit_code_context_mcp":
+                text = tool_args.get("text", "")
+                if not text:
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "error": {"code": -32602, "message": "Missing required parameter: text"}
+                    }
+                try:
+                    # Try to extract and call the function directly from tool manager
+                    if mcp_instance and hasattr(mcp_instance, '_tool_manager'):
+                        tool_manager = mcp_instance._tool_manager
+                        tool_obj = None
+                        if hasattr(tool_manager, 'tools') and tool_name in tool_manager.tools:
+                            tool_obj = tool_manager.tools[tool_name]
+                        elif hasattr(mcp_instance, 'get_tool'):
+                            tool_obj = mcp_instance.get_tool(tool_name)
+                        
+                        if tool_obj:
+                            # Extract underlying function from FunctionTool wrapper
+                            tool_func = None
+                            if hasattr(tool_obj, 'fn'):
+                                tool_func = tool_obj.fn
+                            elif hasattr(tool_obj, 'function'):
+                                tool_func = tool_obj.function
+                            elif callable(tool_obj) and not isinstance(tool_obj, type):
+                                tool_func = tool_obj
+                            
+                            if tool_func:
+                                logger_instance.info(f"Extracted function from tool wrapper in fallback, calling directly")
+                                if inspect.iscoroutinefunction(tool_func):
+                                    result = await tool_func(**tool_args)
+                                else:
+                                    result = tool_func(**tool_args)
+                                return {
+                                    "jsonrpc": "2.0",
+                                    "id": request_id,
+                                    "result": {
+                                        "content": [{"type": "text", "text": str(result)}]
+                                    }
+                                }
+                    
+                    # Last resort: call generate_code_graph_from_context directly
+                    # This ensures the graph generation always happens even if tool extraction fails
+                    logger_instance.warning("Calling generate_code_graph_from_context directly (same function the tool calls)")
+                    result = generate_code_graph_from_context(text)
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "result": {
+                            "content": [{"type": "text", "text": json.dumps(result)}]
+                        }
+                    }
                 except Exception as e:
-                    logger_instance.error(f"FastMCP tool execution failed for {tool_name}: {str(e)}", exc_info=True)
+                    logger_instance.error(f"Error in manual tool handler for {tool_name}: {str(e)}", exc_info=True)
                     return {
                         "jsonrpc": "2.0",
                         "id": request_id,
                         "error": {"code": -32603, "message": f"Tool execution error: {str(e)}"}
                     }
-        
-        logger_instance.warning(f"FastMCP tool discovery failed for {tool_name}. mcp_instance={mcp_instance is not None}, has_tool_manager={hasattr(mcp_instance, '_tool_manager') if mcp_instance else False}")
-        
-        # Manual tool handling (fallback if FastMCP discovery fails)
-        # Try to use FastMCP's execution method even in fallback
-        if tool_name == "submit_code_context_mcp":
-            text = tool_args.get("text", "")
-            if not text:
+            else:
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,
-                    "error": {"code": -32602, "message": "Missing required parameter: text"}
-                }
-            try:
-                # Try to extract and call the function directly from tool manager
-                if mcp_instance and hasattr(mcp_instance, '_tool_manager'):
-                    tool_manager = mcp_instance._tool_manager
-                    tool_obj = None
-                    if hasattr(tool_manager, 'tools') and tool_name in tool_manager.tools:
-                        tool_obj = tool_manager.tools[tool_name]
-                    elif hasattr(mcp_instance, 'get_tool'):
-                        tool_obj = mcp_instance.get_tool(tool_name)
-                    
-                    if tool_obj:
-                        # Extract underlying function from FunctionTool wrapper
-                        tool_func = None
-                        if hasattr(tool_obj, 'fn'):
-                            tool_func = tool_obj.fn
-                        elif hasattr(tool_obj, 'function'):
-                            tool_func = tool_obj.function
-                        elif callable(tool_obj) and not isinstance(tool_obj, type):
-                            tool_func = tool_obj
-                        
-                        if tool_func:
-                            logger_instance.info(f"Extracted function from tool wrapper in fallback, calling directly")
-                            import inspect
-                            if inspect.iscoroutinefunction(tool_func):
-                                result = await tool_func(**tool_args)
-                            else:
-                                result = tool_func(**tool_args)
-                            return {
-                                "jsonrpc": "2.0",
-                                "id": request_id,
-                                "result": {
-                                    "content": [{"type": "text", "text": str(result)}]
-                                }
-                            }
-                
-                # Last resort: call generate_code_graph_from_context directly
-                # This ensures the graph generation always happens even if tool extraction fails
-                logger_instance.warning("Calling generate_code_graph_from_context directly (same function the tool calls)")
-                result = generate_code_graph_from_context(text)
-                return {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "result": {
-                        "content": [{"type": "text", "text": json.dumps(result)}]
-                    }
-                }
-            except Exception as e:
-                logger_instance.error(f"Error in manual tool handler for {tool_name}: {str(e)}", exc_info=True)
-                return {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "error": {"code": -32603, "message": f"Tool execution error: {str(e)}"}
-                }
-        
-        else:
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"}
+                    "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"}
                 }
         
         # Handle initialization
@@ -414,108 +412,108 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
         
         # Handle tools/list
         elif method == "tools/list":
-        # Try to use FastMCP's tool discovery if available
-        if mcp_instance and hasattr(mcp_instance, '_tool_manager'):
-            import inspect
-            tools = []
-            tool_manager = mcp_instance._tool_manager
-            
-            # Get tools from tool manager
-            tool_dict = {}
-            if hasattr(tool_manager, 'tools'):
-                tool_dict = tool_manager.tools
-            elif hasattr(mcp_instance, 'get_tools'):
-                tool_dict = mcp_instance.get_tools()
-            
-            for tool_name, tool_obj in tool_dict.items():
-                # Extract underlying function from FunctionTool wrapper
-                tool_func = tool_obj
-                if hasattr(tool_obj, 'fn'):
-                    # FunctionTool wrapper has .fn attribute with the actual function
-                    tool_func = tool_obj.fn
-                elif hasattr(tool_obj, 'function'):
-                    tool_func = tool_obj.function
-                elif callable(tool_obj) and not isinstance(tool_obj, type):
-                    # It's already a callable function
+            # Try to use FastMCP's tool discovery if available
+            if mcp_instance and hasattr(mcp_instance, '_tool_manager'):
+                import inspect
+                tools = []
+                tool_manager = mcp_instance._tool_manager
+                
+                # Get tools from tool manager
+                tool_dict = {}
+                if hasattr(tool_manager, 'tools'):
+                    tool_dict = tool_manager.tools
+                elif hasattr(mcp_instance, 'get_tools'):
+                    tool_dict = mcp_instance.get_tools()
+                
+                for tool_name, tool_obj in tool_dict.items():
+                    # Extract underlying function from FunctionTool wrapper
                     tool_func = tool_obj
-                
-                # Get function signature and docstring
-                sig = inspect.signature(tool_func)
-                doc = inspect.getdoc(tool_func) or ""
-                
-                # Extract description from docstring
-                # Include full docstring up to a reasonable limit for MCP protocol
-                # This ensures all instructions and requirements are visible to the LLM
-                if doc:
-                    # Use the full docstring, but limit to 5000 chars to avoid overly long descriptions
-                    # Most MCP clients can handle this length, and it ensures complete instructions
-                    description = doc[:5000] + "..." if len(doc) > 5000 else doc
-                else:
-                    description = f"Tool: {tool_name}"
-                
-                # Build input schema from function parameters
-                properties = {}
-                required = []
-                for param_name, param in sig.parameters.items():
-                    # Skip 'self' and other special parameters
-                    if param_name == 'self':
-                        continue
+                    if hasattr(tool_obj, 'fn'):
+                        # FunctionTool wrapper has .fn attribute with the actual function
+                        tool_func = tool_obj.fn
+                    elif hasattr(tool_obj, 'function'):
+                        tool_func = tool_obj.function
+                    elif callable(tool_obj) and not isinstance(tool_obj, type):
+                        # It's already a callable function
+                        tool_func = tool_obj
                     
-                    # Determine parameter type
-                    param_type = "string"  # default
-                    if param.annotation != inspect.Parameter.empty:
-                        if param.annotation == int:
-                            param_type = "integer"
-                        elif param.annotation == float:
-                            param_type = "number"
-                        elif param.annotation == bool:
-                            param_type = "boolean"
-                        elif param.annotation == list:
-                            param_type = "array"
+                    # Get function signature and docstring
+                    sig = inspect.signature(tool_func)
+                    doc = inspect.getdoc(tool_func) or ""
                     
-                    # Create parameter description
-                    # For 'text' parameter, provide a helpful description
-                    if param_name == "text":
-                        param_description = "Raw text payload containing code chunks with format: [Code Chunk N], File, Lines, [Explanation], [Relationships]. See tool description for full format requirements."
+                    # Extract description from docstring
+                    # Include full docstring up to a reasonable limit for MCP protocol
+                    # This ensures all instructions and requirements are visible to the LLM
+                    if doc:
+                        # Use the full docstring, but limit to 5000 chars to avoid overly long descriptions
+                        # Most MCP clients can handle this length, and it ensures complete instructions
+                        description = doc[:5000] + "..." if len(doc) > 5000 else doc
                     else:
-                        param_description = f"Parameter: {param_name}"
+                        description = f"Tool: {tool_name}"
                     
-                    properties[param_name] = {
-                        "type": param_type,
-                        "description": param_description
-                    }
+                    # Build input schema from function parameters
+                    properties = {}
+                    required = []
+                    for param_name, param in sig.parameters.items():
+                        # Skip 'self' and other special parameters
+                        if param_name == 'self':
+                            continue
+                        
+                        # Determine parameter type
+                        param_type = "string"  # default
+                        if param.annotation != inspect.Parameter.empty:
+                            if param.annotation == int:
+                                param_type = "integer"
+                            elif param.annotation == float:
+                                param_type = "number"
+                            elif param.annotation == bool:
+                                param_type = "boolean"
+                            elif param.annotation == list:
+                                param_type = "array"
+                        
+                        # Create parameter description
+                        # For 'text' parameter, provide a helpful description
+                        if param_name == "text":
+                            param_description = "Raw text payload containing code chunks with format: [Code Chunk N], File, Lines, [Explanation], [Relationships]. See tool description for full format requirements."
+                        else:
+                            param_description = f"Parameter: {param_name}"
+                        
+                        properties[param_name] = {
+                            "type": param_type,
+                            "description": param_description
+                        }
+                        
+                        # Add to required if no default value
+                        if param.default == inspect.Parameter.empty:
+                            required.append(param_name)
                     
-                    # Add to required if no default value
-                    if param.default == inspect.Parameter.empty:
-                        required.append(param_name)
+                    tools.append({
+                        "name": tool_name,
+                        "description": description,
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": properties,
+                            "required": required if required else []
+                        }
+                    })
                 
-                tools.append({
-                    "name": tool_name,
-                    "description": description,
-                    "inputSchema": {
-                        "type": "object",
-                        "properties": properties,
-                        "required": required if required else []
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "tools": tools
                     }
-                })
-            
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "tools": tools
                 }
-            }
-        else:
-            # Fall back to custom schema
-            schema = get_tools_list_schema()
-            schema["id"] = request_id
-            return schema
+            else:
+                # Fall back to custom schema
+                schema = get_tools_list_schema()
+                schema["id"] = request_id
+                return schema
         
-    # Handle initialized notification (no response needed)
-    elif method == "notifications/initialized":
-        return {"jsonrpc": "2.0", "id": None}  # Notifications don't have responses
-    
-    else:
-        return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Unknown method: {method}"}}
+        # Handle initialized notification (no response needed)
+        elif method == "notifications/initialized":
+            return {"jsonrpc": "2.0", "id": None}  # Notifications don't have responses
+        
+        else:
+            return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Unknown method: {method}"}}
 
