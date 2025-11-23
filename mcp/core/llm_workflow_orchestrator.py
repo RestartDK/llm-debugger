@@ -266,6 +266,7 @@ def run_generated_test_through_tracer_and_analyze(
     blocks: Sequence[BasicBlock] | None = None,
     test_index: int = 0,
     execute_all_tests: bool = False,
+    cumulative_sources: Sequence[Dict[str, str]] | None = None,  # For cumulative repair across tests
 ) -> LlmDebugRunResult:
     """
     End-to-end pipeline:
@@ -288,6 +289,7 @@ def run_generated_test_through_tracer_and_analyze(
         )
         
         # Generate instruction file
+        print(f"[orchestrator] All {len(test_results)} tests completed, generating instruction file...", file=sys.stderr)
         original_sources = list(sources) if sources is not None else get_dummy_sources()
         instruction_filepath = generate_instruction_file_from_test_results(
             agent=agent,
@@ -307,12 +309,14 @@ def run_generated_test_through_tracer_and_analyze(
             execute_all_tests=False,
         )
 
-    source_entries = list(sources) if sources is not None else None
+    # Use cumulative_sources if provided (for cumulative repair), otherwise use sources
+    source_entries = list(cumulative_sources) if cumulative_sources else (list(sources) if sources is not None else None)
     if source_entries is None:
         print("[orchestrator] WARNING: sources is None, falling back to DUMMY sources", file=sys.stderr)
         source_entries = get_dummy_sources()
     else:
-        print(f"[orchestrator] Received {len(source_entries)} source files", file=sys.stderr)
+        source_type = "cumulative" if cumulative_sources else "original"
+        print(f"[orchestrator] Received {len(source_entries)} {source_type} source files", file=sys.stderr)
 
     if not source_entries:
         raise ValueError("No source files provided for test generation.")
@@ -414,10 +418,15 @@ def run_generated_test_through_tracer_and_analyze(
         # Analyze result
         trace_entries = trace_payload.get("trace", []) or []
         error_info = trace_payload.get("error")
+        test_execution_error = trace_payload.get("test_execution_error")
         source_loading_errors = trace_payload.get("source_loading_errors", [])
         stderr_text = trace_payload.get("stderr")
         
-        is_success = not source_loading_errors and not error_info
+        is_success = (
+            not source_loading_errors 
+            and not error_info 
+            and not test_execution_error  # Check for assertion failures
+        )
         status = "success" if is_success else "error"
         
         # Construct error summary
@@ -426,6 +435,8 @@ def run_generated_test_through_tracer_and_analyze(
             error_summary = f"Source loading failed: {source_loading_errors[0].get('message')}"
         elif error_info:
             error_summary = f"Runtime error: {error_info.get('message')}"
+        elif test_execution_error:
+            error_summary = f"Test assertion failed: {test_execution_error.get('message')}"
             
         # Record attempt
         attempt = ExecutionAttempt(
@@ -485,6 +496,8 @@ def run_generated_test_through_tracer_and_analyze(
             context_errors = source_loading_errors or []
             if error_info:
                 context_errors.append(error_info)
+            if test_execution_error:
+                context_errors.append(test_execution_error)  # Include assertion failures
                 
             # Log source before re-enhancement
             for src in source_entries:
@@ -517,12 +530,13 @@ def run_generated_test_through_tracer_and_analyze(
     # Prepare final results based on the last attempt (or successful one)
     trace_entries = final_trace_payload.get("trace", []) or []
     error_info = final_trace_payload.get("error")
+    test_execution_error = final_trace_payload.get("test_execution_error")
     source_loading_errors = final_trace_payload.get("source_loading_errors", [])
     stderr_text = final_trace_payload.get("stderr")
     
     print(
         f"[orchestrator] trace_entries count: {len(trace_entries)}, "
-        f"error_info: {error_info}",
+        f"error_info: {error_info}, test_execution_error: {test_execution_error is not None}",
     )
     
     # Log errors
@@ -531,6 +545,8 @@ def run_generated_test_through_tracer_and_analyze(
             print(f"[orchestrator] Source error: {err.get('message')}", file=sys.stderr)
     if error_info:
          print(f"[orchestrator] Runtime error: {error_info.get('message')}", file=sys.stderr)
+    if test_execution_error:
+        print(f"[orchestrator] Test assertion failure: {test_execution_error.get('message')}", file=sys.stderr)
     
     if stderr_text:
         print("[orchestrator] runner stderr:\n", stderr_text)
@@ -616,9 +632,17 @@ def run_generated_test_through_tracer_and_analyze(
     actual_description = (
         error_info.get("message", "All assertions passed (no error)")
         if error_info
-        else "All assertions passed (no error)"
+        else (
+            test_execution_error.get("message", "All assertions passed (no error)")
+            if test_execution_error
+            else "All assertions passed (no error)"
+        )
     )
-    notes = error_info.get("traceback") if error_info else None
+    notes = (
+        error_info.get("traceback") 
+        if error_info 
+        else (test_execution_error.get("traceback") if test_execution_error else None)
+    )
 
     failed_test = FailedTest(
         name=test_case.name,
@@ -684,8 +708,14 @@ def run_all_tests_through_tracer_and_analyze(
     print(f"[orchestrator] Generated {len(suite.tests)} tests, executing all...", file=sys.stderr)
     
     results: List[LlmDebugRunResult] = []
+    current_enhanced_sources = None  # Will accumulate fixes across tests
+    
     for test_idx in range(len(suite.tests)):
         print(f"[orchestrator] Executing test {test_idx + 1}/{len(suite.tests)}: {suite.tests[test_idx].name}", file=sys.stderr)
+        
+        # Use cumulative enhanced sources if available, otherwise start from original
+        sources_to_use = current_enhanced_sources if current_enhanced_sources else sources
+        
         try:
             result = run_generated_test_through_tracer_and_analyze(
                 agent=agent,
@@ -693,7 +723,18 @@ def run_all_tests_through_tracer_and_analyze(
                 sources=sources,
                 blocks=blocks,
                 test_index=test_idx,
+                execute_all_tests=False,  # Individual test repair loop
+                cumulative_sources=sources_to_use,  # Pass cumulative sources
             )
+            
+            # Extract final enhanced sources from this test's attempts for cumulative repair
+            if result.attempts:
+                last_attempt = result.attempts[-1]
+                if last_attempt.code_snapshot:
+                    current_enhanced_sources = last_attempt.code_snapshot
+                    print(f"[orchestrator] Updated cumulative sources from test {test_idx + 1} (attempts: {len(result.attempts)})", file=sys.stderr)
+                    print(f"[orchestrator] Cumulative sources now have {len(current_enhanced_sources)} file(s)", file=sys.stderr)
+            
             results.append(result)
         except Exception as e:
             print(f"[orchestrator] Error executing test {test_idx}: {e}", file=sys.stderr)
