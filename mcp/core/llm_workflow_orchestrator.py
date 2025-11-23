@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import ast
 import sys
+import time
+import traceback
 from dataclasses import dataclass
 from textwrap import dedent
-from typing import Any, Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .agent import LlmDebugAgent
 from .debug_analysis_llm import (
@@ -21,6 +24,107 @@ import asyncio
 from . import mcp_routes
 
 
+def extract_function_from_code(
+    code: str, function_name: Optional[str] = None, start_line: Optional[int] = None, end_line: Optional[int] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Extract a complete function definition from code.
+    
+    Args:
+        code: Source code to parse
+        function_name: Optional function name to search for
+        start_line: Optional start line hint (1-indexed)
+        end_line: Optional end line hint (1-indexed)
+    
+    Returns:
+        Dict with keys: 'code', 'name', 'signature', 'dependencies', 'line_start', 'line_end'
+        or None if function not found
+    """
+    try:
+        tree = ast.parse(code)
+        
+        # If we have line hints, extract code from that range
+        if start_line and end_line:
+            lines = code.split('\n')
+            if 1 <= start_line <= len(lines) and 1 <= end_line <= len(lines):
+                extracted_code = '\n'.join(lines[start_line - 1:end_line])
+                # Try to parse just this section
+                try:
+                    section_tree = ast.parse(extracted_code)
+                    for node in ast.walk(section_tree):
+                        if isinstance(node, ast.FunctionDef):
+                            func_code = ast.get_source_segment(code, node) or extracted_code
+                            return {
+                                'code': func_code,
+                                'name': node.name,
+                                'signature': ast.unparse(node.args) if hasattr(ast, 'unparse') else str(node.args),
+                                'dependencies': _extract_dependencies(node),
+                                'line_start': node.lineno,
+                                'line_end': node.end_lineno if hasattr(node, 'end_lineno') else node.lineno,
+                            }
+                except SyntaxError:
+                    # If parsing fails, return the raw code snippet
+                    return {
+                        'code': extracted_code,
+                        'name': function_name or 'unknown',
+                        'signature': '',
+                        'dependencies': [],
+                        'line_start': start_line,
+                        'line_end': end_line,
+                    }
+        
+        # Otherwise, search for function definitions
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                if function_name is None or node.name == function_name:
+                    func_code = ast.get_source_segment(code, node) or code
+                    return {
+                        'code': func_code,
+                        'name': node.name,
+                        'signature': ast.unparse(node.args) if hasattr(ast, 'unparse') else str(node.args),
+                        'dependencies': _extract_dependencies(node),
+                        'line_start': node.lineno,
+                        'line_end': node.end_lineno if hasattr(node, 'end_lineno') else node.lineno,
+                    }
+        
+        return None
+    except SyntaxError as e:
+        print(f"[orchestrator] WARNING: Could not parse code for function extraction: {e}", file=sys.stderr)
+        # Return raw code snippet if parsing fails
+        if start_line and end_line:
+            lines = code.split('\n')
+            if 1 <= start_line <= len(lines) and 1 <= end_line <= len(lines):
+                return {
+                    'code': '\n'.join(lines[start_line - 1:end_line]),
+                    'name': function_name or 'unknown',
+                    'signature': '',
+                    'dependencies': [],
+                    'line_start': start_line,
+                    'line_end': end_line,
+                }
+        return None
+    except Exception as e:
+        print(f"[orchestrator] ERROR extracting function: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"[orchestrator] Traceback:\n{traceback.format_exc()}", file=sys.stderr)
+        return None
+
+
+def _extract_dependencies(node: ast.AST) -> List[str]:
+    """Extract dependencies (imports, names) from an AST node."""
+    dependencies = []
+    for child in ast.walk(node):
+        if isinstance(child, ast.Import):
+            for alias in child.names:
+                dependencies.append(alias.name)
+        elif isinstance(child, ast.ImportFrom):
+            if child.module:
+                dependencies.append(child.module)
+        elif isinstance(child, ast.Name) and isinstance(child.ctx, ast.Load):
+            # This is a name being used (not defined)
+            dependencies.append(child.id)
+    return list(set(dependencies))  # Remove duplicates
+
+
 def render_generated_test_case_to_python(
     case: GeneratedTestCase, suite: GeneratedTestSuite
 ) -> str:
@@ -30,6 +134,7 @@ def render_generated_test_case_to_python(
     The prompt should ensure `case.input` contains the code that prepares inputs
     and calls the target under test, while `case.expected_output` contains the
     assertions that must hold.
+    Includes mock setup code if provided.
     """
 
     header = dedent(
@@ -40,10 +145,17 @@ def render_generated_test_case_to_python(
         """
     ).strip()
 
+    # Include mock setup if provided
+    parts = [header]
+    if case.mock_setup:
+        parts.append(case.mock_setup)
+    if case.input:
+        parts.append(case.input)
+    if case.expected_output:
+        parts.append(case.expected_output)
+
     return "\n\n".join(
-        part.strip()
-        for part in (header, case.input or "", case.expected_output or "")
-        if part and part.strip()
+        part.strip() for part in parts if part and part.strip()
     )
 
 
@@ -165,6 +277,7 @@ class LlmDebugRunResult:
     debug_analysis: DebugAnalysis
     blocks: List[BlockInfo]
     runtime_states: List[RuntimeStateSnapshot]
+    execution_log: Optional[List[Dict[str, Any]]] = None
 
 def apply_suggested_fixes_to_source(
     
@@ -267,44 +380,127 @@ def run_generated_test_through_tracer_and_analyze(
     4. Convert the trace into BlockInfo + RuntimeStateSnapshots.
     5. Ask the LLM to diagnose which blocks misbehaved.
     """
+    pipeline_start_time = time.time()
+    execution_log: List[Dict[str, Any]] = []
+    
+    def log_step(step_name: str, message: str, data: Optional[Dict[str, Any]] = None):
+        elapsed = time.time() - pipeline_start_time
+        log_entry = {
+            'timestamp': elapsed,
+            'step': step_name,
+            'message': message,
+        }
+        if data:
+            log_entry['data'] = data
+        execution_log.append(log_entry)
+        print(f"[orchestrator] [{step_name}] ({elapsed:.2f}s) {message}", file=sys.stderr)
+        if data:
+            print(f"[orchestrator] [{step_name}] Data: {data}", file=sys.stderr)
 
-    source_entries = list(sources) if sources is not None else get_dummy_sources()
-    if not source_entries:
-        raise ValueError("No source files provided for test generation.")
+    try:
+        log_step("init", "Starting test execution pipeline", {
+            'task_description': task_description,
+            'blocks_count': len(blocks) if blocks else 0,
+            'sources_count': len(sources) if sources else 0,
+        })
 
-    code_snippet = source_entries[0]["code"]
-    suite = agent.generate_tests_for_code(code_snippet=code_snippet)
+        source_entries = list(sources) if sources is not None else get_dummy_sources()
+        if not source_entries:
+            raise ValueError("No source files provided for test generation.")
 
-    if not suite.tests:
-        raise ValueError("LLM did not return any generated tests.")
-    if not (0 <= test_index < len(suite.tests)):
-        raise IndexError(f"test_index {test_index} outside range of generated tests.")
+        # Extract function code from blocks if available
+        code_snippet = source_entries[0]["code"]
+        target_function = None
+        extracted_function = None
+        
+        if blocks and len(blocks) > 0:
+            # Try to extract function from first block
+            first_block = blocks[0]
+            log_step("extract", f"Extracting function from block {first_block.block_id}", {
+                'file_path': first_block.file_path,
+                'start_line': first_block.start_line,
+                'end_line': first_block.end_line,
+            })
+            
+            extracted_function = extract_function_from_code(
+                code_snippet,
+                function_name=None,  # We don't know the function name yet
+                start_line=first_block.start_line,
+                end_line=first_block.end_line
+            )
+            
+            if extracted_function:
+                code_snippet = extracted_function['code']
+                target_function = extracted_function['name']
+                log_step("extract", f"Extracted function: {target_function}", {
+                    'dependencies': extracted_function.get('dependencies', []),
+                    'code_length': len(code_snippet),
+                })
+            else:
+                log_step("extract", "Could not extract function, using full code snippet", {
+                    'code_length': len(code_snippet),
+                })
 
-    selected_index = _select_valid_test_index(suite, test_index)
-    if selected_index != test_index:
-        print(
-            f"[orchestrator] selected test index {selected_index} instead of "
-            f"preferred {test_index} due to validation heuristics."
+        log_step("test_gen", "Generating test cases", {
+            'target_function': target_function,
+            'code_snippet_length': len(code_snippet),
+        })
+        
+        suite = agent.generate_tests_for_code(
+            code_snippet=code_snippet,
+            target_function=target_function
         )
+        
+        log_step("test_gen", f"Generated {len(suite.tests)} test case(s)", {
+            'target_function': suite.target_function,
+            'test_style': suite.test_style,
+        })
 
-    test_case = suite.tests[selected_index]
-    tests_code = render_generated_test_case_to_python(test_case, suite)
+        if not suite.tests:
+            raise ValueError("LLM did not return any generated tests.")
+        if not (0 <= test_index < len(suite.tests)):
+            raise IndexError(f"test_index {test_index} outside range of generated tests.")
 
-    block_entries = list(blocks) if blocks is not None else get_dummy_blocks()
-    payload = build_runner_payload(
-        sources=source_entries,
-        blocks=block_entries,
-        tests=tests_code,
-    )
-    print(
-        "[orchestrator] runner payload summary:",
-        {
+        selected_index = _select_valid_test_index(suite, test_index)
+        if selected_index != test_index:
+            log_step("test_select", f"Selected test index {selected_index} instead of preferred {test_index}")
+
+        test_case = suite.tests[selected_index]
+        log_step("test_render", f"Rendering test case: {test_case.name}", {
+            'has_mock_setup': bool(test_case.mock_setup),
+            'dependencies': test_case.dependencies or [],
+        })
+        
+        tests_code = render_generated_test_case_to_python(test_case, suite)
+        log_step("test_render", "Test code rendered", {
+            'test_code_length': len(tests_code),
+            'preview': tests_code[:200],
+        })
+
+        block_entries = list(blocks) if blocks is not None else get_dummy_blocks()
+        log_step("payload_build", "Building runner payload", {
+            'sources_count': len(source_entries),
+            'blocks_count': len(block_entries),
+        })
+        
+        payload = build_runner_payload(
+            sources=source_entries,
+            blocks=block_entries,
+            tests=tests_code,
+        )
+        
+        log_step("subprocess", "Running test in subprocess", {
             "sources": [entry["file_path"] for entry in source_entries],
             "blocks": [block.block_id for block in block_entries],
-            "tests_code_preview": tests_code[:200],
-        },
-    )
-    trace_payload = run_with_block_tracing_subprocess(payload=payload)
+        })
+        
+        trace_payload = run_with_block_tracing_subprocess(payload=payload)
+        
+        log_step("subprocess", "Subprocess completed", {
+            'has_error': 'error' in trace_payload,
+            'trace_entries_count': len(trace_payload.get('trace', [])),
+            'has_source_loading_errors': len(trace_payload.get('source_loading_errors', [])) > 0,
+        })
     trace_entries: List[Dict[str, Any]] = trace_payload.get("trace", []) or []
     error_info: Dict[str, Any] | None = trace_payload.get("error")
     source_loading_errors: List[Dict[str, Any]] = trace_payload.get("source_loading_errors", [])
@@ -336,39 +532,52 @@ def run_generated_test_through_tracer_and_analyze(
     if stderr_text:
         print("[orchestrator] runner stderr:\n", stderr_text)
 
-    block_lookup = _build_block_info_lookup(block_entries, source_entries)
-    snapshot_pairs = _build_runtime_snapshots_from_trace(trace_entries)
-
-    block_infos: List[BlockInfo] = []
-    runtime_states: List[RuntimeStateSnapshot] = []
-    for block_id, snapshot in snapshot_pairs:
-        block_info = block_lookup.get(block_id)
-        if block_info is None:
-            continue
-        block_infos.append(block_info)
-        runtime_states.append(snapshot)
-
-    if not block_infos or not runtime_states:
-        # Provide rich diagnostics so it's easier to understand why nothing
-        # was analyzable (no trace at all vs. trace that didn't match blocks).
-        trace_block_ids = [
-            entry.get("block_id")
-            for entry in trace_entries
-            if entry.get("block_id") is not None
-        ]
-        print(
-            "[orchestrator] no executable blocks found; debug summary:",
-            {
-                "trace_entry_count": len(trace_entries),
-                "trace_block_ids_sample": trace_block_ids[:10],
-                "snapshot_pairs_count": len(snapshot_pairs),
-                "block_lookup_ids_sample": list(block_lookup.keys())[:10],
-            },
-        )
+        log_step("block_lookup", "Building block lookup", {
+            'blocks_count': len(block_entries),
+        })
         
-        # Test failed before executing any blocks (e.g., syntax error, missing function call, source loading error)
-        # Check if we have source loading errors
-        if source_loading_errors:
+        block_lookup = _build_block_info_lookup(block_entries, source_entries)
+        snapshot_pairs = _build_runtime_snapshots_from_trace(trace_entries)
+        
+        log_step("snapshot_build", f"Built {len(snapshot_pairs)} snapshot pairs", {
+            'trace_entries_count': len(trace_entries),
+        })
+
+        block_infos: List[BlockInfo] = []
+        runtime_states: List[RuntimeStateSnapshot] = []
+        for block_id, snapshot in snapshot_pairs:
+            block_info = block_lookup.get(block_id)
+            if block_info is None:
+                continue
+            block_infos.append(block_info)
+            runtime_states.append(snapshot)
+
+        log_step("block_match", f"Matched {len(block_infos)} blocks with runtime states", {
+            'block_infos_count': len(block_infos),
+            'runtime_states_count': len(runtime_states),
+        })
+
+        if not block_infos or not runtime_states:
+            # Provide rich diagnostics so it's easier to understand why nothing
+            # was analyzable (no trace at all vs. trace that didn't match blocks).
+            trace_block_ids = [
+                entry.get("block_id")
+                for entry in trace_entries
+                if entry.get("block_id") is not None
+            ]
+            print(
+                "[orchestrator] no executable blocks found; debug summary:",
+                {
+                    "trace_entry_count": len(trace_entries),
+                    "trace_block_ids_sample": trace_block_ids[:10],
+                    "snapshot_pairs_count": len(snapshot_pairs),
+                    "block_lookup_ids_sample": list(block_lookup.keys())[:10],
+                },
+            )
+            
+            # Test failed before executing any blocks (e.g., syntax error, missing function call, source loading error)
+            # Check if we have source loading errors
+            if source_loading_errors:
             # Prioritize source loading errors in the description
             decorator_errors = [e for e in source_loading_errors if e.get("error_type") == "decorator_framework_error"]
             if decorator_errors:
@@ -419,45 +628,68 @@ def run_generated_test_through_tracer_and_analyze(
             if block.block_id in block_lookup
         ]
 
+            log_step("no_blocks", "No blocks executed, creating fallback result")
+            
+            return LlmDebugRunResult(
+                suite=suite,
+                test_case=test_case,
+                trace_payload=trace_payload,
+                debug_analysis=debug_analysis,
+                blocks=fallback_blocks,
+                runtime_states=[],
+                execution_log=execution_log,
+            )
+
+        log_step("analysis", f"Analyzing {len(block_infos)} blocks", {
+            'runtime_states_count': len(runtime_states),
+        })
+        
+        actual_description = (
+            error_info.get("message", "All assertions passed (no error)")
+            if error_info
+            else "All assertions passed (no error)"
+        )
+        notes = error_info.get("traceback") if error_info else None
+
+        failed_test = FailedTest(
+            name=test_case.name,
+            input=test_case.input,
+            expected=test_case.expected_output,
+            actual=actual_description,
+            notes=notes,
+        )
+
+        debug_analysis = agent.analyze_failed_test(
+            task_description=task_description,
+            blocks=block_infos,
+            runtime_states=runtime_states,
+            failed_test=failed_test,
+        )
+        
+        log_step("complete", "Pipeline completed successfully", {
+            'total_time': time.time() - pipeline_start_time,
+            'blocks_analyzed': len(block_infos),
+        })
+
         return LlmDebugRunResult(
             suite=suite,
             test_case=test_case,
             trace_payload=trace_payload,
             debug_analysis=debug_analysis,
-            blocks=fallback_blocks,
-            runtime_states=[],
+            blocks=block_infos,
+            runtime_states=runtime_states,
+            execution_log=execution_log,
         )
-
-    actual_description = (
-        error_info.get("message", "All assertions passed (no error)")
-        if error_info
-        else "All assertions passed (no error)"
-    )
-    notes = error_info.get("traceback") if error_info else None
-
-    failed_test = FailedTest(
-        name=test_case.name,
-        input=test_case.input,
-        expected=test_case.expected_output,
-        actual=actual_description,
-        notes=notes,
-    )
-
-    debug_analysis = agent.analyze_failed_test(
-        task_description=task_description,
-        blocks=block_infos,
-        runtime_states=runtime_states,
-        failed_test=failed_test,
-    )
-
-    return LlmDebugRunResult(
-        suite=suite,
-        test_case=test_case,
-        trace_payload=trace_payload,
-        debug_analysis=debug_analysis,
-        blocks=block_infos,
-        runtime_states=runtime_states,
-    )
+    except Exception as e:
+        elapsed = time.time() - pipeline_start_time
+        tb = traceback.format_exc()
+        log_step("error", f"Pipeline failed after {elapsed:.2f}s: {type(e).__name__}: {e}", {
+            'error_type': type(e).__name__,
+            'error_message': str(e),
+            'traceback': tb,
+        })
+        # Re-raise with enhanced context
+        raise
 
 
 def build_static_cfg_from_blocks(
@@ -528,12 +760,64 @@ def build_static_cfg_from_blocks(
 def build_debugger_ui_payload(run_result: LlmDebugRunResult) -> Dict[str, object]:
     """
     Convert an LlmDebugRunResult into a Branch/frontend friendly payload.
+    Includes errors, warnings, execution logs, and source loading status.
     """
 
     trace_entries: List[Dict[str, Any]] = (
         run_result.trace_payload.get("trace", []) or []
     )
     block_lookup: Dict[str, BlockInfo] = {block.id: block for block in run_result.blocks}
+    
+    # Extract error information from trace payload
+    error_info = run_result.trace_payload.get("error")
+    source_loading_errors = run_result.trace_payload.get("source_loading_errors", [])
+    test_execution_error = run_result.trace_payload.get("test_execution_error")
+    
+    # Build errors list with stack traces
+    errors: List[Dict[str, Any]] = []
+    if error_info:
+        errors.append({
+            "error_type": error_info.get("error_type", "unknown"),
+            "message": error_info.get("message", "Unknown error"),
+            "traceback": error_info.get("traceback"),
+            "context": "test_execution",
+        })
+    if source_loading_errors:
+        for err in source_loading_errors:
+            errors.append({
+                "error_type": err.get("error_type", "unknown"),
+                "message": err.get("message", "Unknown error"),
+                "traceback": err.get("traceback"),
+                "file_path": err.get("file_path"),
+                "context": "source_loading",
+            })
+    if test_execution_error:
+        errors.append({
+            "error_type": test_execution_error.get("error_type", "unknown"),
+            "message": test_execution_error.get("message", "Unknown error"),
+            "traceback": test_execution_error.get("traceback"),
+            "context": "test_execution",
+        })
+    
+    # Build warnings list
+    warnings: List[Dict[str, Any]] = []
+    if source_loading_errors:
+        warnings.append({
+            "type": "source_loading_failed",
+            "message": f"{len(source_loading_errors)} source file(s) failed to load",
+            "details": source_loading_errors,
+        })
+    
+    # Build source loading status
+    summary = run_result.trace_payload.get("summary", {})
+    sources_loaded = summary.get("sources_loaded", 0)
+    sources_failed = len(source_loading_errors)
+    source_loading_status = {
+        "total": sources_loaded + sources_failed,
+        "loaded": sources_loaded,
+        "failed": sources_failed,
+        "errors": source_loading_errors,
+    }
 
     # Build RuntimeStep-like structures from trace entries
     steps: List[Dict[str, Any]] = []
@@ -637,7 +921,7 @@ def build_debugger_ui_payload(run_result: LlmDebugRunResult) -> Dict[str, object
             )
         prev_block_for_file[file_path] = block.id
 
-    return {
+    payload = {
         "suite": run_result.suite.model_dump(),
         "test_case": run_result.test_case.model_dump(),
         "trace": trace_entries,
@@ -647,5 +931,16 @@ def build_debugger_ui_payload(run_result: LlmDebugRunResult) -> Dict[str, object
         "edges": edges,
         "analysis": run_result.debug_analysis.model_dump(),
     }
+    
+    # Add enhanced error information
+    if errors:
+        payload["errors"] = errors
+    if warnings:
+        payload["warnings"] = warnings
+    if run_result.execution_log:
+        payload["execution_log"] = run_result.execution_log
+    payload["source_loading_status"] = source_loading_status
+    
+    return payload
 
 
