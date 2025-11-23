@@ -295,7 +295,44 @@ def run_generated_test_through_tracer_and_analyze(
                 "block_lookup_ids_sample": list(block_lookup.keys())[:10],
             },
         )
-        raise RuntimeError("Trace did not yield any executable blocks to analyze.")
+        
+        # Test failed before executing any blocks (e.g., syntax error, missing function call)
+        # Return a minimal result with error information but no block analysis
+        actual_description = (
+            error_info.get("message", "Test failed before executing any code blocks")
+            if error_info
+            else "Test failed before executing any code blocks"
+        )
+        notes = error_info.get("traceback") if error_info else None
+        
+        # Create a minimal debug analysis indicating no blocks were executed
+        from .debug_analysis_llm import DebugAnalysis
+        failed_test = FailedTest(
+            name=test_case.name,
+            input=test_case.input,
+            expected=test_case.expected_output,
+            actual=actual_description,
+            notes=notes,
+        )
+        debug_analysis = DebugAnalysis(
+            task_description=(
+                f"Test '{test_case.name}' failed before executing any code blocks. "
+                f"Error: {actual_description}. "
+                f"The test may be missing a function call or has a syntax error. "
+                f"Check that the test input includes the actual function invocation."
+            ),
+            failed_test=failed_test,
+            assessments=[],  # No blocks to assess since none were executed
+        )
+        
+        return LlmDebugRunResult(
+            suite=suite,
+            test_case=test_case,
+            trace_payload=trace_payload,
+            debug_analysis=debug_analysis,
+            blocks=[],
+            runtime_states=[],
+        )
 
     actual_description = (
         error_info.get("message", "All assertions passed (no error)")
