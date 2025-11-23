@@ -28,6 +28,7 @@ interface ApiEdge {
 interface ApiControlFlowResponse {
   nodes: ApiNode[];
   edges: ApiEdge[];
+  task_description?: string;
 }
 
 class HttpError extends Error {
@@ -165,7 +166,11 @@ function transformApiResponseToReactFlow(
     label: apiEdge.relationship_type, // Optional: show relationship type on edge
   }));
 
-  return { nodes, edges };
+  return {
+    nodes,
+    edges,
+    task_description: apiResponse.task_description,
+  };
 }
 
 // Backend route: @app.get("/get_control_flow_diagram") from main.py
@@ -179,6 +184,77 @@ export const fetchControlFlow = async (): Promise<ControlFlowResponse> => {
   console.log('[API] Transformed response:', transformed);
   return transformed;
 };
+
+/**
+ * Convert React Flow nodes to backend blocks format
+ */
+export function convertNodesToBlocks(
+  nodes: Node<CfgNodeData>[],
+): Array<{
+  block_id: string;
+  file_path: string;
+  start_line: number;
+  end_line: number;
+}> {
+  return nodes
+    .filter(
+      (node) =>
+        node.data.file &&
+        node.data.lineStart !== undefined &&
+        node.data.lineEnd !== undefined,
+    )
+    .map((node) => ({
+      block_id: node.id,
+      file_path: node.data.file || '',
+      start_line: node.data.lineStart || 0,
+      end_line: node.data.lineEnd || 0,
+    }));
+}
+
+/**
+ * Extract sources from nodes by grouping code snippets by file
+ */
+export function extractSourcesFromNodes(
+  nodes: Node<CfgNodeData>[],
+): Array<{ file_path: string; code: string }> {
+  // Group nodes by file
+  const fileMap = new Map<string, Node<CfgNodeData>[]>();
+
+  nodes.forEach((node) => {
+    if (node.data.file) {
+      const file = node.data.file;
+      if (!fileMap.has(file)) {
+        fileMap.set(file, []);
+      }
+      fileMap.get(file)!.push(node);
+    }
+  });
+
+  // Combine code snippets for each file
+  const sources: Array<{ file_path: string; code: string }> = [];
+
+  fileMap.forEach((fileNodes, filePath) => {
+    // Sort nodes by lineStart to maintain order
+    const sortedNodes = [...fileNodes].sort(
+      (a, b) => (a.data.lineStart || 0) - (b.data.lineStart || 0),
+    );
+
+    // Combine code snippets - for now, just join them with newlines
+    // In a more sophisticated implementation, we might merge overlapping ranges
+    const codeSnippets = sortedNodes
+      .map((node) => node.data.codeSnippet)
+      .filter((code) => code && code.trim().length > 0);
+
+    if (codeSnippets.length > 0) {
+      sources.push({
+        file_path: filePath,
+        code: codeSnippets.join('\n\n'),
+      });
+    }
+  });
+
+  return sources;
+}
 
 export const executeTestCases = (
   body: ExecuteTestCasesRequest,

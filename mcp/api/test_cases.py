@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any, TypedDict
 
 from core.agent import LlmDebugAgent
+from core.debug_types import BasicBlock
 from core.dummy_cfg import get_dummy_blocks, get_dummy_sources
 from core.llm_workflow_orchestrator import (
     build_debugger_ui_payload,
@@ -33,6 +34,7 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
         data: JSON body from POST /execute_test_cases. Supports:
             - task_description: human readable text for the debugging run.
             - sources: optional list of {"file_path", "code"} dicts.
+            - blocks: optional list of {"block_id", "file_path", "start_line", "end_line"} dicts.
     """
 
     task_description = data.get(
@@ -40,7 +42,25 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
     )
 
     sources = data.get("sources") or get_dummy_sources()
-    blocks = get_dummy_blocks()
+    
+    # Convert blocks from dict format to BasicBlock objects if provided
+    blocks_raw = data.get("blocks")
+    if blocks_raw:
+        blocks = [
+            BasicBlock(
+                block_id=block_dict.get("block_id", ""),
+                file_path=block_dict.get("file_path", ""),
+                start_line=block_dict.get("start_line", 0),
+                end_line=block_dict.get("end_line", 0),
+            )
+            for block_dict in blocks_raw
+            if block_dict.get("block_id") and block_dict.get("file_path")
+        ]
+        if not blocks:
+            # If conversion failed, fall back to dummy blocks
+            blocks = get_dummy_blocks()
+    else:
+        blocks = get_dummy_blocks()
 
     agent = LlmDebugAgent()
     run_result = run_generated_test_through_tracer_and_analyze(

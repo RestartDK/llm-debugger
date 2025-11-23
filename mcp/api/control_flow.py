@@ -102,6 +102,7 @@ def get_control_flow_diagram() -> dict:
     
     Reads the most recent JSON file from the contexts/ folder that matches
     the timestamp pattern YYYY-MM-DD_HH-MM.json.
+    Also extracts task_description from node explanations.
     """
     graph_data = get_most_recent_context_json()
     
@@ -110,8 +111,14 @@ def get_control_flow_diagram() -> dict:
         logger.warning("No context JSON file found, returning empty graph")
         return {
             "nodes": [],
-            "edges": []
+            "edges": [],
+            "task_description": "Investigate generated test failure"
         }
+    
+    # Extract task_description from graph_data (should already be included from generate_code_graph_from_context)
+    # If not present, use default
+    if "task_description" not in graph_data:
+        graph_data["task_description"] = "Investigate generated test failure"
     
     return graph_data
 

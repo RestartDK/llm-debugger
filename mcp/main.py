@@ -263,10 +263,10 @@ def get_control_flow_diagram_endpoint():
 
 
 @app.post("/execute_test_cases")
-def execute_test_cases_endpoint(request: Request):
+async def execute_test_cases_endpoint(request: Request):
     """Execute test cases."""
     try:
-        data = asyncio.run(request.json())
+        data = await request.json()
         logger.info(f"POST /execute_test_cases - Received: {data}")
         result = execute_test_cases(data)
         logger.info(f"POST /execute_test_cases - Response: {result}")

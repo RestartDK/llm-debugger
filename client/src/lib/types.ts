@@ -57,6 +57,7 @@ export interface DebuggerState {
 export interface ControlFlowResponse {
   nodes: Node<CfgNodeData>[];
   edges: Edge[];
+  task_description?: string;
 }
 
 export interface DebuggerPayload extends ControlFlowResponse {
@@ -69,5 +70,12 @@ export interface DebuggerPayload extends ControlFlowResponse {
 }
 
 export interface ExecuteTestCasesRequest {
+  task_description?: string;
   sources?: { file_path: string; code: string }[];
+  blocks?: Array<{
+    block_id: string;
+    file_path: string;
+    start_line: number;
+    end_line: number;
+  }>;
 }

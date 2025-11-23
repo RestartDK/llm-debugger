@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { Edge, Node } from '@xyflow/react';
 import { LeftPanel } from './components/LeftPanel';
 import { CfgCanvas } from './components/CfgCanvas';
-import { executeTestCases, fetchControlFlow } from './lib/api';
+import {
+  executeTestCases,
+  fetchControlFlow,
+  convertNodesToBlocks,
+  extractSourcesFromNodes,
+} from './lib/api';
 import { layoutCfgNodes } from './lib/utils';
 import type {
   CfgNodeData,
@@ -27,6 +32,9 @@ function App() {
   const [cfgError, setCfgError] = useState<string | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [taskDescription, setTaskDescription] = useState<string | undefined>(
+    undefined,
+  );
 
   const leftPanelRef = useRef<ImperativePanelHandle>(null);
   
@@ -122,7 +130,26 @@ function App() {
     setAnalysisLoading(true);
     setAnalysisError(null);
     try {
+      // Convert nodes to blocks format
+      const blocks = convertNodesToBlocks(nodes);
+      
+      // Extract sources from nodes
+      const sources = extractSourcesFromNodes(nodes);
+      
+      // Use task_description from GET response, or fallback to default
+      const task_description =
+        taskDescription || 'Investigate generated test failure';
+      
+      console.log('[App] Running analysis with:', {
+        task_description,
+        blocksCount: blocks.length,
+        sourcesCount: sources.length,
+      });
+      
       const payload = await executeTestCases({
+        task_description,
+        blocks,
+        sources,
       });
       handleAnalysisSuccess(payload);
     } catch (error) {
@@ -167,6 +194,7 @@ function App() {
         
         setNodes(laidOutNodes);
         setEdges(diagram.edges);
+        setTaskDescription(diagram.task_description);
         if (laidOutNodes.length > 0) {
           setActiveNodeId(laidOutNodes[0].id);
         }

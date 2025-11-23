@@ -34,6 +34,71 @@ class Edge(BaseModel):
 class EdgesList(BaseModel):
     edges: List[Edge] = Field(description="List of edges from the focus node to other nodes.")
 
+class TaskDescription(BaseModel):
+    task_description: str = Field(description="A concise 1-2 sentence description of the debugging task or issue to investigate, extracted from the context dump.")
+
+
+def extract_task_description(context_dump: str, model: str = "openai/gpt-oss-120b") -> str:
+    """
+    Extract or generate a task description from a context dump string.
+    
+    Makes an LLM call to analyze the context dump and generate a concise
+    task description that summarizes the debugging task or issue to investigate.
+    
+    Args:
+        context_dump: Raw text containing code chunks, explanations, and relationships
+        model: Model to use for extraction (default: "openai/gpt-oss-120b")
+        
+    Returns:
+        String containing the task description
+    """
+    logger.info(f"Starting extract_task_description with model {model}")
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY environment variable is not set")
+    
+    client = Groq(api_key=api_key)
+    
+    system_prompt = """You are an expert code analyzer that extracts task descriptions from debugging context dumps.
+
+Your task is to analyze a context dump containing code chunks, explanations of bugs/issues, and relationships between code chunks, then generate a concise task description that summarizes what needs to be debugged or investigated.
+
+The task description should:
+- Be 1-2 sentences long
+- Summarize the main debugging task or issue to investigate
+- Focus on the problem or bug that needs to be addressed
+- Be clear and actionable
+
+Examples of good task descriptions:
+- "Investigate why process_data() function fails when items is None, causing TypeError in calculate_totals()"
+- "Debug the API handler that incorrectly validates input before calling calculate_totals()"
+- "Find and fix the bug where data validation is missing, leading to runtime errors"
+
+Extract the task description from the explanations and relationships in the context dump."""
+    
+    user_prompt = f"""Extract a task description from the following context dump:
+
+{context_dump}"""
+    
+    # Wrap client with instructor for structured output
+    instructor_client = instructor.from_groq(client)
+    
+    try:
+        response = instructor_client.chat.completions.create(
+            model=model,
+            response_model=TaskDescription,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        )
+        logger.info(f"Successfully extracted task description: {response.task_description[:100]}...")
+        return response.task_description
+    except Exception as e:
+        logger.error(f"Failed to extract task description: {str(e)}")
+        # Fallback to default if extraction fails
+        return "Investigate generated test failure"
+
 
 def create_code_nodes(context_dump: str, model: str = "openai/gpt-oss-120b") -> CodeNodes:
     """
@@ -522,14 +587,26 @@ def generate_code_graph_from_context(
             progress_callback=progress_callback
         )
         
+        # Extract task description from context dump
+        if progress_callback:
+            progress_callback("extracting_task", "Extracting task description...", 0.9)
+        
+        try:
+            task_description = extract_task_description(context_dump)
+            logger.info(f"Extracted task description: {task_description[:100]}...")
+        except Exception as e:
+            logger.warning(f"Failed to extract task description, using default: {str(e)}")
+            task_description = "Investigate generated test failure"
+        
         # Convert to dicts for JSON serialization
         nodes_dict = result.model_dump()
         edges_dict = [edge.model_dump() for edge in edges]
         
-        # Create combined output with nodes and edges
+        # Create combined output with nodes, edges, and task_description
         combined_output = {
             "nodes": nodes_dict["nodes"],
-            "edges": edges_dict
+            "edges": edges_dict,
+            "task_description": task_description
         }
         
         # Generate filename: YYYY-MM-DD_HH-MM.json
