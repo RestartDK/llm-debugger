@@ -2,6 +2,9 @@
 Debug fix instructions handling.
 """
 
+from datetime import datetime
+import os
+from typing import Callable, Optional
 from core.agent import LlmDebugAgent
 from core.dummy_cfg import get_dummy_fix_instructions
 from core.llm_workflow_orchestrator import apply_suggested_fixes_to_source
@@ -45,25 +48,55 @@ If you need more context from a file, request it before editing.
 
 '''
 
-def send_debugger_response(data: dict) -> dict:
+def send_debugger_response(data: dict,
+                           progress_callback: Optional[Callable[[str, str, float], None]] = None,
+                           output_dir: str = "instructions"
+                           ) -> dict:
     """
     Accept debugger feedback payloads (e.g., user-selected fixes) and echo them.
     """
 
+    # Starting
+    if progress_callback:
+        progress_callback("starting", "Starting instructions saving...", 0.0)
+    
+    os.makedirs(output_dir, exist_ok=True)
     
     task_description = data.get(
         "task_description", get_task_description()
     )
 
     instructions = data.get("instructions") or get_dummy_fix_instructions()
-    agent = LlmDebugAgent()
 
     
-    apply_suggested_fixes_to_source(
-        agent=agent,
-        task_description=task_description,
-        instructions=instructions,
-    )
+    # Generate filename: YYYY-MM-DD_HH-MM.json
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    filename = f"{timestamp}.txt"
+    filepath = os.path.join(output_dir, filename)
+
+    # Saving
+    if progress_callback:
+        progress_callback("saving", f"Saving instructions to {filename}...", 0.95)
+    
+    # Save to txt file
+    with open(filepath, 'w') as f:
+        f.write(task_description + '\n' + instructions)
+
+    # Complete
+    if progress_callback:
+        progress_callback("complete", "Instructions saving complete.", 1.0)
+
+        
+    # agent = LlmDebugAgent()
+
+    
+    # apply_suggested_fixes_to_source(
+    #     agent=agent,
+    #     task_description=task_description,
+    #     instructions=instructions,
+    # )
+
+
 
     return {
         "status": "ok",
