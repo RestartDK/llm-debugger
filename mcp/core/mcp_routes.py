@@ -133,7 +133,7 @@ async def sse_endpoint_handler(request: Request) -> StreamingResponse:
                     yield f"data: {json.dumps(response)}\n\n"
                 else:
                     # Send heartbeat every 30 seconds
-                    await asyncio.sleep(30)
+                await asyncio.sleep(30)
                     yield f": heartbeat\n\n"
         except asyncio.CancelledError:
             pass
@@ -238,64 +238,92 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
     else:
         logger_instance = logging.getLogger(__name__)
         logger_instance.warning("No connection_id provided for MCP request - progress updates may not work")
-    
-    # Handle MCP tool call
-    if method == "tools/call":
-        tool_name = params.get("name", "")
-        tool_args = params.get("arguments", {})
         
+        # Handle MCP tool call
+        if method == "tools/call":
+            tool_name = params.get("name", "")
+            tool_args = params.get("arguments", {})
+            
         logger_instance.info(f"Processing tool call: {tool_name} with args keys: {list(tool_args.keys())}")
         
-        # Debug: Log what attributes mcp_instance has
-        if mcp_instance:
-            logger_instance.info(f"mcp_instance type: {type(mcp_instance)}")
-            logger_instance.info(f"mcp_instance attributes: {[attr for attr in dir(mcp_instance) if not attr.startswith('__')]}")
-            if hasattr(mcp_instance, '_tools'):
-                logger_instance.info(f"mcp_instance._tools: {list(mcp_instance._tools.keys()) if hasattr(mcp_instance._tools, 'keys') else mcp_instance._tools}")
-            # FastMCP might use different attribute names - check common ones
-            for attr_name in ['_tools', 'tools', 'registered_tools']:
-                if hasattr(mcp_instance, attr_name):
-                    attr_value = getattr(mcp_instance, attr_name)
-                    logger_instance.info(f"mcp_instance.{attr_name}: {attr_value}")
-        
-        # Try to use FastMCP's tool if available, otherwise fall back to manual handling
-        if mcp_instance and hasattr(mcp_instance, '_tools') and tool_name in mcp_instance._tools:
-            logger_instance.info(f"Using FastMCP tool discovery for {tool_name}")
-            try:
-                import inspect
-                tool_func = mcp_instance._tools[tool_name]
-                logger_instance.info(f"Tool function found: {tool_func}, is_async={inspect.iscoroutinefunction(tool_func)}")
-                # Handle both sync and async tools
-                if inspect.iscoroutinefunction(tool_func):
-                    import asyncio
-                    # If it's async, we need to run it in the event loop
-                    # But since we're in an async function, we can await it
-                    logger_instance.info(f"Calling async tool {tool_name}")
-                    result = await tool_func(**tool_args)
-                else:
-                    # Synchronous function - call directly
-                    logger_instance.info(f"Calling synchronous tool {tool_name} - this will block until complete")
-                    result = tool_func(**tool_args)
-                    logger_instance.info(f"Tool {tool_name} completed with result length: {len(str(result))}")
-                return {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "result": {
-                        "content": [{"type": "text", "text": str(result)}]
+        # Try to use FastMCP's tool execution method if available
+        if mcp_instance and hasattr(mcp_instance, '_tool_manager'):
+            tool_manager = mcp_instance._tool_manager
+            # Check if tool exists in tool manager
+            tool_exists = False
+            if hasattr(tool_manager, 'tools') and tool_name in tool_manager.tools:
+                tool_exists = True
+            elif hasattr(mcp_instance, 'get_tool'):
+                tool_obj = mcp_instance.get_tool(tool_name)
+                tool_exists = tool_obj is not None
+            
+            if tool_exists:
+                logger_instance.info(f"Using FastMCP tool execution for {tool_name}")
+                try:
+                    # Get the tool object from tool manager
+                    tool_obj = None
+                    if hasattr(tool_manager, 'tools') and tool_name in tool_manager.tools:
+                        tool_obj = tool_manager.tools[tool_name]
+                    elif hasattr(mcp_instance, 'get_tool'):
+                        tool_obj = mcp_instance.get_tool(tool_name)
+                    
+                    if tool_obj:
+                        # Extract underlying function from FunctionTool wrapper
+                        tool_func = None
+                        if hasattr(tool_obj, 'fn'):
+                            # FunctionTool wrapper has .fn attribute with the actual function
+                            tool_func = tool_obj.fn
+                        elif hasattr(tool_obj, 'function'):
+                            tool_func = tool_obj.function
+                        elif callable(tool_obj) and not isinstance(tool_obj, type):
+                            # It's already a callable function
+                            tool_func = tool_obj
+                        
+                        if tool_func:
+                            logger_instance.info(f"Extracted function from tool wrapper: {tool_func}")
+                            import inspect
+                            # Handle both sync and async functions
+                            if inspect.iscoroutinefunction(tool_func):
+                                logger_instance.info(f"Calling async tool {tool_name}")
+                                result = await tool_func(**tool_args)
+                            else:
+                                logger_instance.info(f"Calling synchronous tool {tool_name} - this will block until complete")
+                                result = tool_func(**tool_args)
+                            logger_instance.info(f"Tool {tool_name} completed with result length: {len(str(result))}")
+                            return {
+                                "jsonrpc": "2.0",
+                                "id": request_id,
+                                "result": {
+                                    "content": [{"type": "text", "text": str(result)}]
+                                }
+                            }
+                        else:
+                            logger_instance.warning(f"Could not extract function from tool wrapper, trying _call_tool_mcp()")
+                            # Fallback: try _call_tool_mcp if available
+                            if hasattr(mcp_instance, '_call_tool_mcp'):
+                                logger_instance.info(f"Calling tool {tool_name} via _call_tool_mcp()")
+                                result = await mcp_instance._call_tool_mcp(tool_name, tool_args)
+                                return {
+                                    "jsonrpc": "2.0",
+                                    "id": request_id,
+                                    "result": {
+                                        "content": [{"type": "text", "text": str(result)}]
+                                    }
+                                }
+                    else:
+                        logger_instance.warning(f"Tool object not found, falling back to manual handler")
+                except Exception as e:
+                    logger_instance.error(f"FastMCP tool execution failed for {tool_name}: {str(e)}", exc_info=True)
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "error": {"code": -32603, "message": f"Tool execution error: {str(e)}"}
                     }
-                }
-            except Exception as e:
-                logger_instance.error(f"FastMCP tool execution failed for {tool_name}: {str(e)}", exc_info=True)
-                return {
-                    "jsonrpc": "2.0",
-                    "id": request_id,
-                    "error": {"code": -32603, "message": f"Tool execution error: {str(e)}"}
-                }
-        else:
-            logger_instance.warning(f"FastMCP tool discovery failed for {tool_name}. mcp_instance={mcp_instance is not None}, has_tools={hasattr(mcp_instance, '_tools') if mcp_instance else False}, tool_in_tools={tool_name in mcp_instance._tools if (mcp_instance and hasattr(mcp_instance, '_tools')) else False}")
+        
+        logger_instance.warning(f"FastMCP tool discovery failed for {tool_name}. mcp_instance={mcp_instance is not None}, has_tool_manager={hasattr(mcp_instance, '_tool_manager') if mcp_instance else False}")
         
         # Manual tool handling (fallback if FastMCP discovery fails)
-        # Try to import and call the actual tool function from main.py
+        # Try to use FastMCP's execution method even in fallback
         if tool_name == "submit_code_context_mcp":
             text = tool_args.get("text", "")
             if not text:
@@ -305,26 +333,43 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
                     "error": {"code": -32602, "message": "Missing required parameter: text"}
                 }
             try:
-                # Try to import the actual tool function from main module
-                # This ensures we execute the exact same code as the FastMCP tool
-                import sys
-                import importlib
-                if 'main' in sys.modules:
-                    main_module = sys.modules['main']
-                    if hasattr(main_module, 'submit_code_context_mcp'):
-                        logger_instance.info("Calling submit_code_context_mcp from main module (manual fallback)")
-                        tool_func = getattr(main_module, 'submit_code_context_mcp')
-                        result = tool_func(text)
-                        return {
-                            "jsonrpc": "2.0",
-                            "id": request_id,
-                            "result": {
-                                "content": [{"type": "text", "text": str(result)}]
+                # Try to extract and call the function directly from tool manager
+                if mcp_instance and hasattr(mcp_instance, '_tool_manager'):
+                    tool_manager = mcp_instance._tool_manager
+                    tool_obj = None
+                    if hasattr(tool_manager, 'tools') and tool_name in tool_manager.tools:
+                        tool_obj = tool_manager.tools[tool_name]
+                    elif hasattr(mcp_instance, 'get_tool'):
+                        tool_obj = mcp_instance.get_tool(tool_name)
+                    
+                    if tool_obj:
+                        # Extract underlying function from FunctionTool wrapper
+                        tool_func = None
+                        if hasattr(tool_obj, 'fn'):
+                            tool_func = tool_obj.fn
+                        elif hasattr(tool_obj, 'function'):
+                            tool_func = tool_obj.function
+                        elif callable(tool_obj) and not isinstance(tool_obj, type):
+                            tool_func = tool_obj
+                        
+                        if tool_func:
+                            logger_instance.info(f"Extracted function from tool wrapper in fallback, calling directly")
+                            import inspect
+                            if inspect.iscoroutinefunction(tool_func):
+                                result = await tool_func(**tool_args)
+                            else:
+                                result = tool_func(**tool_args)
+                            return {
+                                "jsonrpc": "2.0",
+                                "id": request_id,
+                                "result": {
+                                    "content": [{"type": "text", "text": str(result)}]
+                                }
                             }
-                        }
                 
-                # Fallback: call graph generation directly if main module not available
-                logger_instance.warning("main module not available, calling generate_code_graph_from_context directly")
+                # Last resort: call generate_code_graph_from_context directly
+                # This ensures the graph generation always happens even if tool extraction fails
+                logger_instance.warning("Calling generate_code_graph_from_context directly (same function the tool calls)")
                 result = generate_code_graph_from_context(text)
                 return {
                     "jsonrpc": "2.0",
@@ -346,34 +391,54 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
                 "jsonrpc": "2.0",
                 "id": request_id,
                 "error": {"code": -32601, "message": f"Unknown tool: {tool_name}"}
-            }
-    
-    # Handle initialization
-    elif method == "initialize":
-        return {
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {
+                }
+        
+        # Handle initialization
+        elif method == "initialize":
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
                     "tools": {
                         "listChanged": True
                     }
-                },
-                "serverInfo": {
-                    "name": "Debug Context MCP Server",
+                    },
+                    "serverInfo": {
+                        "name": "Debug Context MCP Server",
                     "version": "0.2.0"
+                    }
                 }
             }
-        }
-    
-    # Handle tools/list
-    elif method == "tools/list":
+        
+        # Handle tools/list
+        elif method == "tools/list":
         # Try to use FastMCP's tool discovery if available
-        if mcp_instance and hasattr(mcp_instance, '_tools'):
+        if mcp_instance and hasattr(mcp_instance, '_tool_manager'):
             import inspect
             tools = []
-            for tool_name, tool_func in mcp_instance._tools.items():
+            tool_manager = mcp_instance._tool_manager
+            
+            # Get tools from tool manager
+            tool_dict = {}
+            if hasattr(tool_manager, 'tools'):
+                tool_dict = tool_manager.tools
+            elif hasattr(mcp_instance, 'get_tools'):
+                tool_dict = mcp_instance.get_tools()
+            
+            for tool_name, tool_obj in tool_dict.items():
+                # Extract underlying function from FunctionTool wrapper
+                tool_func = tool_obj
+                if hasattr(tool_obj, 'fn'):
+                    # FunctionTool wrapper has .fn attribute with the actual function
+                    tool_func = tool_obj.fn
+                elif hasattr(tool_obj, 'function'):
+                    tool_func = tool_obj.function
+                elif callable(tool_obj) and not isinstance(tool_obj, type):
+                    # It's already a callable function
+                    tool_func = tool_obj
+                
                 # Get function signature and docstring
                 sig = inspect.signature(tool_func)
                 doc = inspect.getdoc(tool_func) or ""
@@ -446,7 +511,7 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
             schema = get_tools_list_schema()
             schema["id"] = request_id
             return schema
-    
+        
     # Handle initialized notification (no response needed)
     elif method == "notifications/initialized":
         return {"jsonrpc": "2.0", "id": None}  # Notifications don't have responses
