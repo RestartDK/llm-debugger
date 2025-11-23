@@ -89,13 +89,21 @@ Return the enhanced code that:
 - Includes all necessary imports/stubs at the top
 - Can be executed without NameError, ImportError, or similar dependency errors
 
-Return data that strictly matches the JSON schema:
+CRITICAL: You MUST provide structured output matching this exact JSON schema:
 {{
-  "file_path": "{file_path}",
-  "enhanced_code": "complete executable Python code with imports/stubs",
-  "added_imports": ["list of what was added"],
-  "reasoning": "brief explanation of what was enhanced"
+  "file_path": "string (required - must match the provided file_path)",
+  "enhanced_code": "string (required - complete executable Python code with imports/stubs)",
+  "added_imports": ["array of strings (required - list of what was added, can be empty array [])"],
+  "reasoning": "string (required - brief explanation of what was enhanced)"
 }}
+
+IMPORTANT STRUCTURED OUTPUT RULES:
+- ALL required fields must be present and non-null
+- "file_path" must be a string matching the provided file path
+- "enhanced_code" must be a string containing the complete executable code
+- "added_imports" must be an array of strings (can be empty [] if nothing was added)
+- "reasoning" must be a string explaining what was enhanced
+- Ensure all fields match their schema types exactly: strings must be strings, arrays must be arrays
 """
     return dedent(prompt).strip()
 
