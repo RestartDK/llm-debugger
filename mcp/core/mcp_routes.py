@@ -246,8 +246,17 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
         # Try to use FastMCP's tool if available, otherwise fall back to manual handling
         if mcp_instance and hasattr(mcp_instance, '_tools') and tool_name in mcp_instance._tools:
             try:
+                import inspect
                 tool_func = mcp_instance._tools[tool_name]
-                result = tool_func(**tool_args)
+                # Handle both sync and async tools
+                if inspect.iscoroutinefunction(tool_func):
+                    import asyncio
+                    # If it's async, we need to run it in the event loop
+                    # But since we're in an async function, we can await it
+                    result = await tool_func(**tool_args)
+                else:
+                    # Synchronous function - call directly
+                    result = tool_func(**tool_args)
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,

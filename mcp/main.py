@@ -11,7 +11,7 @@ import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
-from fastmcp import FastMCP, Context
+from fastmcp import FastMCP
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -41,7 +41,7 @@ mcp = FastMCP("Debug Context MCP Server")
 
 # Register MCP tool
 @mcp.tool()
-async def submit_code_context_mcp(text: str, ctx: Context) -> str:
+def submit_code_context_mcp(text: str) -> str:
     """
     Submit potential bug areas from codebase analysis. REQUIRES MULTIPLE CODE CHUNKS in sequence, each with ACTUAL CODE BLOCKS (5-10 lines), not English descriptions.
     
@@ -123,7 +123,6 @@ async def submit_code_context_mcp(text: str, ctx: Context) -> str:
         "Graph generation request received (chars=%d). Running synchronously.",
         context_size,
     )
-    logger.debug("submit_code_context_mcp context object: %s", ctx)
     
     try:
         result = generate_code_graph_from_context(text)
