@@ -142,7 +142,7 @@ def generate_subprocess_command(
     
     try:
         run_result = agent.agent.run_sync(prompt)
-        command_text = run_result.data.strip()
+        command_text = run_result.output.strip()
         
         # Remove markdown code blocks if present
         if command_text.startswith("```python"):
@@ -192,7 +192,7 @@ def repair_subprocess_command(
     
     try:
         run_result = agent.agent.run_sync(prompt)
-        repaired_command = run_result.data.strip()
+        repaired_command = run_result.output.strip()
         
         # Remove markdown code blocks if present
         if repaired_command.startswith("```python"):
