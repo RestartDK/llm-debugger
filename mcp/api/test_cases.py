@@ -15,7 +15,7 @@ from core.llm_workflow_orchestrator import (
 )
 
 
-class DebuggerPayload(TypedDict, total=False):
+class DebuggerPayload(TypedDict):
     suite: dict[str, Any]
     test_case: dict[str, Any]
     trace: list[dict[str, Any]]
@@ -24,10 +24,6 @@ class DebuggerPayload(TypedDict, total=False):
     nodes: list[dict[str, Any]]
     edges: list[dict[str, Any]]
     analysis: dict[str, Any]
-    errors: list[dict[str, Any]]  # List of error objects with stack traces
-    warnings: list[dict[str, Any]]  # List of warnings
-    execution_log: list[dict[str, Any]]  # Structured log of execution steps
-    source_loading_status: dict[str, Any]  # Status of each source file
 
 
 def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
@@ -64,7 +60,7 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
             # If conversion failed, fall back to dummy blocks
             blocks = get_dummy_blocks()
     else:
-        blocks = get_dummy_blocks()
+    blocks = get_dummy_blocks()
 
     agent = LlmDebugAgent()
     run_result = run_generated_test_through_tracer_and_analyze(
