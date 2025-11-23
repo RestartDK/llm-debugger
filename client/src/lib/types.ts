@@ -1,10 +1,12 @@
-export type RuntimeValue = 
-  | string 
-  | number 
-  | boolean 
-  | null 
-  | undefined 
-  | RuntimeValue[] 
+import type { Edge, Node } from '@xyflow/react';
+
+export type RuntimeValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | RuntimeValue[]
   | { [key: string]: RuntimeValue };
 
 export interface VariableState {
@@ -50,4 +52,23 @@ export interface DebuggerState {
   steps: RuntimeStep[];
   problems: Problem[];
   isSidebarOpen: boolean;
+}
+
+export interface ControlFlowResponse {
+  nodes: Node<CfgNodeData>[];
+  edges: Edge[];
+}
+
+export interface DebuggerPayload extends ControlFlowResponse {
+  suite: Record<string, unknown>;
+  test_case: Record<string, unknown>;
+  trace: Record<string, unknown>[];
+  steps: RuntimeStep[];
+  problems: Problem[];
+  analysis: Record<string, unknown>;
+}
+
+export interface ExecuteTestCasesRequest {
+  task_description: string;
+  sources?: { file_path: string; code: string }[];
 }

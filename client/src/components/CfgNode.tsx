@@ -60,10 +60,19 @@ export const CfgNode = memo(({ data, selected, isConnectable, problems = [] }: C
   const targetConnections = useNodeConnections({ handleType: 'target' });
   const sourceConnections = useNodeConnections({ handleType: 'source' });
 
-  // Check if this node has any warnings
-  const hasWarning = useMemo(() => {
-    return problems.some(p => p.blockId === nodeData.blockId && p.severity === 'warning');
-  }, [problems, nodeData.blockId]);
+  const nodeProblems = useMemo(
+    () => problems.filter((problem) => problem.blockId === nodeData.blockId),
+    [problems, nodeData.blockId],
+  );
+  const warningProblem = useMemo(
+    () => nodeProblems.find((problem) => problem.severity === 'warning'),
+    [nodeProblems],
+  );
+  const errorProblem = useMemo(
+    () => nodeProblems.find((problem) => problem.severity === 'error'),
+    [nodeProblems],
+  );
+  const hasWarning = Boolean(warningProblem);
 
   return (
     <div 
@@ -134,8 +143,8 @@ export const CfgNode = memo(({ data, selected, isConnectable, problems = [] }: C
              <div className="absolute right-0 top-8 w-64 p-3 bg-popover text-popover-foreground rounded-md border border-red-200 shadow-xl z-50 text-xs">
                 <div className="font-semibold mb-1 text-red-600">Error Analysis</div>
                 <p>
-                  {/* In a real app, this would come from data.error or matched problem */}
-                  This block produced an incorrect value for 'cnt'. Expected increment of 1, got 2.
+                  {errorProblem?.description ??
+                    'This block failed during execution. No additional details were provided.'}
                 </p>
              </div>
            )}

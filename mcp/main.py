@@ -18,9 +18,6 @@ from fastmcp import FastMCP
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Hardcoded control-flow graph response (TODO: revert to dynamic generation)
-# Payload is stored in dummy_cfg.HARDCODED_CODE_GRAPH so deployments do not rely on copying a JSON file.
-
 # Import from core package
 from core import sse_message_handler, submit_code_context
 from core.create_ctrlflow_json import generate_code_graph_from_context
@@ -203,12 +200,15 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Allow all origins for development (Vite dev server typically runs on localhost:5173)
+# In production, replace "*" with specific allowed origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allows all origins - suitable for development
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # ============================================================================
@@ -249,11 +249,20 @@ async def health():
 async def get_control_flow_diagram_endpoint():
     """Return the latest control-flow graph snapshot.
 
-    TODO: Replace this hardcoded payload with a fresh call to
-    get_control_flow_diagram() once the dynamic generation pipeline is ready.
+    Uses the dummy ecommerce pipeline until real projects are wired in, but
+    the response already matches the frontend's Node<CfgNodeData>/Edge types.
     """
-    logger.info("GET /get_control_flow_diagram - Returning hardcoded payload")
-    return HARDCODED_CODE_GRAPH
+    logger.info("GET /get_control_flow_diagram - Building CFG via dummy pipeline")
+    # Run the synchronous function in a thread pool to avoid event loop conflicts
+    # This is necessary because get_control_flow_diagram() calls agent.run_sync()
+    # which tries to use run_until_complete() on an already-running event loop
+    diagram = await asyncio.to_thread(get_control_flow_diagram)
+    logger.info(
+        "GET /get_control_flow_diagram - nodes=%d edges=%d",
+        len(diagram.get("nodes", [])),
+        len(diagram.get("edges", [])),
+    )
+    return diagram
 
 
 @app.post("/execute_test_cases")
@@ -262,7 +271,9 @@ async def execute_test_cases_endpoint(request: Request):
     try:
         data = await request.json()
         logger.info(f"POST /execute_test_cases - Received: {data}")
-        result = execute_test_cases(data)
+        # Run the synchronous function in a thread pool to avoid event loop conflicts
+        # This is necessary because execute_test_cases() calls agent.run_sync()
+        result = await asyncio.to_thread(execute_test_cases, data)
         logger.info(f"POST /execute_test_cases - Response: {result}")
         return result
     except Exception as e:
@@ -276,7 +287,9 @@ async def send_debugger_response_endpoint(request: Request):
     try:
         data = await request.json()
         logger.info(f"POST /send_debugger_response - Received: {data}")
-        result = send_debugger_response(data)
+        # Run the synchronous function in a thread pool to avoid event loop conflicts
+        # This prevents issues if send_debugger_response() uses any blocking operations
+        result = await asyncio.to_thread(send_debugger_response, data)
         logger.info(f"POST /send_debugger_response - Response: {result}")
         return result
     except Exception as e:
