@@ -15,6 +15,11 @@ from .debug_types import BasicBlock
 from .dummy_cfg import get_dummy_blocks, get_dummy_sources
 from .mcp_tools import build_runner_payload, run_with_block_tracing_subprocess
 from .test_generation_llm import GeneratedTestCase, GeneratedTestSuite
+import os
+import re
+from pathlib import Path
+from datetime import datetime
+from textwrap import dedent as _dedent
 
 
 def render_generated_test_case_to_python(
@@ -127,8 +132,161 @@ def apply_suggested_fixes_to_source(
     task_description: str,
     instructions: str,
 ) -> None:
-    
-    
+    """
+    Apply suggested fixes to repository source files.
+
+    The function expects `instructions` to contain one or more "[Code Chunk]"
+    sections with a `File: <path>` line, a `Changed:` block and a `To:` block
+    describing the replacement. Example (see `core.dummy_cfg.get_dummy_fix_instructions`):
+
+        [Code Chunk]
+        File: mcp/main.py
+
+        Changed:
+        <original snippet>
+
+        To:
+        <replacement snippet>
+
+    This implementation is intentionally conservative:
+    - Only files explicitly listed by `File:` are modified.
+    - The first exact occurrence of the `Changed:` snippet is replaced.
+    - A timestamped backup is written beside the original before modifying it.
+    - If the `Changed:` snippet can't be found, the function skips that chunk and logs a message.
+
+    Args:
+        agent: LlmDebugAgent (not used directly here but retained for call-site compatibility).
+        task_description: Human-readable task description (unused here).
+        instructions: The raw instructions text returned by the LLM containing patches.
+
+    Returns:
+        None
+    """
+
+    if not instructions:
+        print("No instructions provided to apply_suggested_fixes_to_source")
+        return
+
+    # Normalize line endings and ensure consistent formatting
+    instructions = _dedent(instructions).strip()
+
+    # Split into code chunk sections
+    chunks = [c.strip() for c in re.split(r"\[Code Chunk\]", instructions) if c.strip()]
+
+    repo_root = Path.cwd()
+
+    for chunk in chunks:
+        # Extract File: line
+        m = re.search(r"File:\s*(.+)", chunk)
+        if not m:
+            print("Skipping chunk: no File: line found")
+            continue
+        raw_path = m.group(1).strip()
+
+        # Some instruction producers include the repository name as a prefix; try to normalize
+        candidate_paths = [raw_path]
+        if raw_path.startswith("llm-debugger/"):
+            candidate_paths.append(raw_path[len("llm-debugger/"):])
+        if raw_path.startswith("./"):
+            candidate_paths.append(raw_path[2:])
+
+        target_path = None
+        for p in candidate_paths:
+            candidate = repo_root.joinpath(p)
+            if candidate.exists():
+                target_path = candidate
+                break
+
+        if target_path is None:
+            # Try relative lookup ignoring any leading path segments (fallback)
+            parts = Path(raw_path).parts
+            for i in range(len(parts)):
+                try_p = repo_root.joinpath(*parts[i:])
+                if try_p.exists():
+                    target_path = try_p
+                    break
+
+        if target_path is None:
+            print(f"File not found for chunk: '{raw_path}' - skipped")
+            continue
+
+        # Extract Changed: and To: blocks
+        changed_match = re.search(r"Changed:\s*(.*?)\s*(?:To:|\Z)", chunk, flags=re.S)
+        to_match = re.search(r"To:\s*(.*?)(?:\n\s*\[Explanation\]|\Z)", chunk, flags=re.S)
+
+        if not changed_match or not to_match:
+            print(f"Chunk for '{target_path}' missing Changed:/To: blocks - skipped")
+            continue
+
+        changed_snippet = _dedent(changed_match.group(1)).strip('\n')
+        new_snippet = _dedent(to_match.group(1)).strip('\n')
+
+        if not changed_snippet:
+            print(f"Empty 'Changed' snippet for {target_path} - skipped")
+            continue
+
+        # Read existing file content
+        try:
+            with open(target_path, 'r', encoding='utf-8') as f:
+                file_text = f.read()
+        except Exception as e:
+            print(f"Failed to read {target_path}: {e}")
+            continue
+
+        # Try to locate the exact changed snippet in the file
+        if changed_snippet in file_text:
+            new_text = file_text.replace(changed_snippet, new_snippet, 1)
+            already_applied = False
+        else:
+            # If exact match not found, check whether the new snippet is already present
+            if new_snippet and new_snippet in file_text:
+                print(f"Patch for {target_path} already applied - skipping")
+                continue
+
+            # Fallback: try a whitespace-normalized match
+            def normalize(s: str) -> str:
+                return re.sub(r"\s+", " ", s).strip()
+
+            norm_changed = normalize(changed_snippet)
+            norm_text = normalize(file_text)
+            if norm_changed and norm_changed in norm_text:
+                # Build a new normalized file and then attempt to map replacement naively
+                # This is a best-effort fallback; if it fails, skip
+                idx = norm_text.index(norm_changed)
+                # Can't easily map back to original indices reliably; skip
+                print(f"Found whitespace-normalized match for {target_path} but cannot safely apply - skipped")
+                continue
+            else:
+                print(f"Original snippet not found in {target_path} - skipped")
+                continue
+
+        # Backup original file
+        try:
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = target_path.with_suffix(target_path.suffix + f".bak_{ts}")
+            with open(backup_path, 'w', encoding='utf-8') as bf:
+                bf.write(file_text)
+        except Exception as e:
+            print(f"Failed to create backup for {target_path}: {e}")
+            continue
+
+        # Write the updated file
+        try:
+            with open(target_path, 'w', encoding='utf-8') as out:
+                out.write(new_text)
+            print(f"Applied patch to {target_path} (backup: {backup_path.name})")
+        except Exception as e:
+            print(f"Failed to write updated file {target_path}: {e}")
+            # Attempt to restore from backup
+            try:
+                with open(backup_path, 'r', encoding='utf-8') as bf:
+                    orig = bf.read()
+                with open(target_path, 'w', encoding='utf-8') as out:
+                    out.write(orig)
+                print(f"Restored original from backup for {target_path}")
+            except Exception:
+                print(f"Failed to restore backup for {target_path} - manual intervention required")
+
     return
 
 def run_generated_test_through_tracer_and_analyze(
