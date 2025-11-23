@@ -11,6 +11,9 @@ dependencies = [
     "pydantic-evals>=1.22.0",
     "requests>=2.32.5",
     "uvicorn>=0.22.0",
+    "instructor>=1.0.0",
+    "groq>=0.36.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [build-system]
