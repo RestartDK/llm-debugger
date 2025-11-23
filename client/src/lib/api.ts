@@ -19,6 +19,9 @@ class HttpError extends Error {
 
 const normalizeBaseUrl = (url: string | undefined): string => {
   if (!url) {
+    // Base URL for the backend API server
+    // Backend routes: /get_control_flow_diagram, /execute_test_cases, etc.
+    // Full URL example: https://coolify.scottbot.party/llm_debugger/get_control_flow_diagram
     return 'https://coolify.scottbot.party/llm_debugger';
   }
   return url.endsWith('/') ? url.slice(0, -1) : url;
@@ -43,28 +46,51 @@ async function request<TResponse>(
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(buildUrl(path), {
-    ...options,
-    headers,
-  });
+  const url = buildUrl(path);
+  console.log('[API] Making request to:', url);
 
-  const isJsonResponse =
-    response.headers.get('content-type')?.includes('application/json');
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
 
-  const payload = isJsonResponse ? await response.json() : undefined;
+    console.log('[API] Response status:', response.status, response.statusText);
+    console.log('[API] Response headers:', Object.fromEntries(response.headers.entries()));
 
-  if (!response.ok) {
-    throw new HttpError(
-      payload?.message?.toString() ||
-        `Request to ${path} failed with status ${response.status}`,
-      response.status,
-      payload,
-    );
+    const isJsonResponse =
+      response.headers.get('content-type')?.includes('application/json');
+
+    const payload = isJsonResponse ? await response.json() : undefined;
+
+    if (!response.ok) {
+      console.error('[API] Request failed:', {
+        url,
+        status: response.status,
+        payload,
+      });
+      throw new HttpError(
+        payload?.message?.toString() ||
+          `Request to ${path} failed with status ${response.status}`,
+        response.status,
+        payload,
+      );
+    }
+
+    console.log('[API] Request successful:', url);
+    return payload as TResponse;
+  } catch (error) {
+    console.error('[API] Request error:', {
+      url,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    throw error;
   }
-
-  return payload as TResponse;
 }
 
+// Backend route: @app.get("/get_control_flow_diagram") from main.py
+// Full URL: https://coolify.scottbot.party/llm_debugger/get_control_flow_diagram
 export const fetchControlFlow = (): Promise<ControlFlowResponse> =>
   request<ControlFlowResponse>('/get_control_flow_diagram');
 

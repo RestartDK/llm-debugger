@@ -142,7 +142,9 @@ function App() {
       setCfgLoading(true);
       setCfgError(null);
       try {
+        console.log('[App] Loading control flow diagram...');
         const diagram = await fetchControlFlow();
+        console.log('[App] Control flow diagram loaded:', diagram);
         if (cancelled) return;
         setNodes(diagram.nodes);
         setEdges(diagram.edges);
@@ -150,6 +152,7 @@ function App() {
           setActiveNodeId(diagram.nodes[0].id);
         }
       } catch (error) {
+        console.error('[App] Error loading control flow:', error);
         if (cancelled) return;
         const message =
           error instanceof Error
