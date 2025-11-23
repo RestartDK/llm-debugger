@@ -86,9 +86,15 @@ async def sse_endpoint_handler(request: Request) -> StreamingResponse:
     """
     # Get or generate a connection ID
     import uuid
+    logger_instance = logging.getLogger(__name__)
+    
     connection_id = request.query_params.get("connection_id") or str(uuid.uuid4())
     response_queue = deque()
     sse_connections[connection_id] = response_queue
+    
+    logger_instance.info(f"New SSE connection established: {connection_id}")
+    logger_instance.info(f"Client IP: {request.client.host if request.client else 'unknown'}")
+    logger_instance.info(f"User-Agent: {request.headers.get('user-agent', 'unknown')}")
     
     async def event_stream():
         # Send initial connection message with connection ID
@@ -136,14 +142,42 @@ async def sse_message_handler(request: Request, mcp_instance=None) -> dict:
     Processes MCP JSON-RPC requests and returns responses.
     For SSE transport: if connection_id header is provided, response is also queued for SSE stream.
     """
+    logger_instance = logging.getLogger(__name__)
+    
     try:
         body = await request.json()
         method = body.get("method")
         params = body.get("params", {})
         request_id = body.get("id")
         
-        # Get connection ID from header (Cursor may send this)
-        connection_id = request.headers.get("x-connection-id") or request.query_params.get("connection_id")
+        # Get connection ID from multiple possible sources (in order of preference)
+        # 1. X-Connection-ID header (standard MCP SSE pattern)
+        # 2. connection_id query parameter
+        # 3. connection_id in request body (some clients send it here)
+        # 4. Cookie-based tracking (if set during SSE connection)
+        connection_id = (
+            request.headers.get("x-connection-id") or 
+            request.headers.get("X-Connection-ID") or
+            request.query_params.get("connection_id") or
+            body.get("connection_id") or
+            body.get("params", {}).get("connection_id") or
+            request.cookies.get("mcp_connection_id")
+        )
+        
+        # Log connection_id extraction attempt for debugging
+        logger_instance.info(f"MCP request received - method: {method}")
+        logger_instance.debug(f"Request headers: {dict(request.headers)}")
+        logger_instance.debug(f"Request query params: {dict(request.query_params)}")
+        logger_instance.info(f"Extracted connection_id: {connection_id}")
+        
+        # Fallback: If no connection_id found, try to use the first available connection
+        # This is a fallback for clients (like Cursor) that don't send connection_id
+        # In production with multiple clients, this should be more sophisticated
+        if not connection_id and sse_connections:
+            # Use the first available connection (works for single-client scenarios)
+            connection_id = list(sse_connections.keys())[0]
+            logger_instance.warning(f"No connection_id in request, using first available connection: {connection_id}")
+            logger_instance.warning("Consider implementing IP/session-based connection tracking for multi-client support")
         
         # Process the request and get response (pass connection_id for progress updates)
         response = await process_mcp_request(method, params, request_id, mcp_instance, connection_id=connection_id)

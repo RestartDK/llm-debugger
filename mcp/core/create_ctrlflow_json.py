@@ -58,6 +58,7 @@ def create_code_nodes(context_dump: str, model: str = "openai/gpt-oss-120b") -> 
     Returns:
         CodeNodes object containing a list of CodeNode objects
     """
+    logger.info(f"Starting create_code_nodes with model {model}")
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise ValueError("GROQ_API_KEY environment variable is not set")
@@ -93,15 +94,20 @@ The context dump may contain multiple code chunks in sequence. Extract each one 
     # Wrap client with instructor for structured output
     instructor_client = instructor.from_groq(client)
     
-    response = instructor_client.chat.completions.create(
-        model=model,
-        response_model=CodeNodes,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-    )
-    return response
+    try:
+        response = instructor_client.chat.completions.create(
+            model=model,
+            response_model=CodeNodes,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+        )
+        logger.info(f"Successfully created {len(response.nodes)} code nodes")
+        return response
+    except Exception as e:
+        logger.error(f"Failed to create code nodes: {str(e)}")
+        raise
 
 
 def create_code_nodes_with_retry(
@@ -180,8 +186,11 @@ def create_edges_for_node(
     Returns:
         List of Edge objects representing connections from focus_node to other nodes
     """
+    logger.info(f"Starting create_edges_for_node for focus node: {focus_node.id} (checking {len(other_nodes)} other nodes)")
+    
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
+        logger.error("GROQ_API_KEY environment variable is not set")
         raise ValueError("GROQ_API_KEY environment variable is not set")
     
     client = Groq(api_key=api_key)
@@ -286,9 +295,10 @@ Create edges only where relationships exist. Return an empty list if no relation
             else:
                 logger.warning(f"Invalid edge: to_node '{edge.to_node}' not found in node list. Skipping.")
         
+        logger.info(f"Successfully created {len(validated_edges)} edges for node {focus_node.id}")
         return validated_edges
     except Exception as e:
-        logger.error(f"Error creating edges for node {focus_node.id}: {str(e)}")
+        logger.error(f"Failed to create edges for node {focus_node.id}: {str(e)}")
         raise
 
 
@@ -377,6 +387,7 @@ def create_edges_from_nodes_with_retry(
     Raises:
         Exception: If all retry attempts fail
     """
+    logger.info(f"Starting create_edges_from_nodes_with_retry (max_retries={max_retries}, model={model}, nodes={len(code_nodes.nodes)})")
     delay = initial_delay
     last_exception = None
     
@@ -420,9 +431,11 @@ def generate_code_graph_from_context(
     Returns:
         dict with keys: "status", "filename", "nodes_count", "edges_count", "message"
     """
+    logger.info("Starting generate_code_graph_from_context")
     try:
         # Ensure output directory exists
         os.makedirs(output_dir, exist_ok=True)
+        logger.info(f"Output directory ensured: {output_dir}")
         
         # Starting
         if progress_callback:
@@ -473,17 +486,19 @@ def generate_code_graph_from_context(
         if progress_callback:
             progress_callback("complete", "Graph generation complete. Check the UI.", 1.0)
         
-        return {
+        result_dict = {
             "status": "completed",
             "message": "Graph generation complete. Check the UI.",
             "filename": filename,
             "nodes_count": len(result.nodes),
             "edges_count": len(edges)
         }
+        logger.info(f"Successfully completed generate_code_graph_from_context: {result_dict}")
+        return result_dict
         
     except Exception as e:
         error_msg = f"Error generating graph: {str(e)}"
-        logger.error(error_msg)
+        logger.error(f"Failed generate_code_graph_from_context: {error_msg}", exc_info=True)
         if progress_callback:
             progress_callback("error", error_msg, 0.0)
         return {
