@@ -1,9 +1,10 @@
 import React from 'react';
-import type { RuntimeStep, Problem, TestSuite, TestCase, Analysis } from '@/lib/types';
+import type { RuntimeStep, Problem, TestSuite, TestCase, Analysis, ExecutionAttempt } from '@/lib/types';
 import { RuntimeInspector } from './RuntimeInspector';
 import { ProblemsList } from './ProblemsList';
 import { TestInfo } from './TestInfo';
 import { AnalysisDisplay } from './AnalysisDisplay';
+import { ExecutionTimeline } from './ExecutionTimeline';
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -19,6 +20,7 @@ interface LeftPanelProps {
   suite?: TestSuite;
   testCase?: TestCase;
   analysis?: Analysis;
+  attempts?: ExecutionAttempt[];
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
@@ -30,6 +32,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   suite,
   testCase,
   analysis,
+  attempts,
 }) => {
   // If collapsed, we hide the content entirely (width is handled by parent ResizablePanel collapsedSize=0)
   if (isCollapsed) {
@@ -38,13 +41,15 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 
   const hasTestInfo = suite || testCase;
   const hasAnalysis = analysis;
+  const hasTimeline = attempts && attempts.length > 0;
 
   return (
     <div className="h-full w-full border-r border-border bg-card flex flex-col overflow-hidden">
-      {/* Test Info and Analysis at the top */}
-      {(hasTestInfo || hasAnalysis) && (
-        <div className="flex-shrink-0 overflow-y-auto border-b border-border">
+      {/* Test Info, Analysis, and Timeline at the top */}
+      {(hasTestInfo || hasAnalysis || hasTimeline) && (
+        <div className="flex-shrink-0 overflow-y-auto border-b border-border max-h-[60%]">
           {hasTestInfo && <TestInfo suite={suite} testCase={testCase} />}
+          {hasTimeline && <ExecutionTimeline attempts={attempts} />}
           {hasAnalysis && <AnalysisDisplay analysis={analysis} />}
         </div>
       )}

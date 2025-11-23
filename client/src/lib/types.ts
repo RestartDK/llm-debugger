@@ -89,6 +89,14 @@ export interface Analysis {
   assessments?: unknown[];
 }
 
+export interface ExecutionAttempt {
+  attempt_number: number;
+  status: 'success' | 'error';
+  error_summary?: string;
+  code_snapshot: Array<{ file_path: string; code: string }>;
+  reasoning?: string;
+}
+
 export interface DebuggerPayload extends ControlFlowResponse {
   suite?: TestSuite;
   test_case?: TestCase;
@@ -96,6 +104,7 @@ export interface DebuggerPayload extends ControlFlowResponse {
   steps: RuntimeStep[];
   problems: Problem[];
   analysis?: Analysis;
+  attempts?: ExecutionAttempt[];
 }
 
 export interface ExecuteTestCasesRequest {

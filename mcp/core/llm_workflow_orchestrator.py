@@ -12,7 +12,7 @@ from .debug_analysis_llm import (
     FailedTest,
     RuntimeStateSnapshot,
 )
-from .debug_types import BasicBlock
+from .debug_types import BasicBlock, ExecutionAttempt
 from .dummy_cfg import get_dummy_blocks, get_dummy_sources
 from .mcp_tools import build_runner_payload, run_with_block_tracing_subprocess
 from .source_enhancement_llm import EnhancedSource
@@ -166,6 +166,7 @@ class LlmDebugRunResult:
     debug_analysis: DebugAnalysis
     blocks: List[BlockInfo]
     runtime_states: List[RuntimeStateSnapshot]
+    attempts: List[ExecutionAttempt]
 
 def apply_suggested_fixes_to_source(
     
@@ -338,105 +339,115 @@ def run_generated_test_through_tracer_and_analyze(
         print(f"[orchestrator] Block tracing subprocess returned (attempt {attempt_num})", file=sys.stderr)
         return trace_payload
     
-    # Initial execution attempt
-    trace_payload = _execute_with_sources(enhanced_source_entries, attempt_num=1)
-    trace_entries: List[Dict[str, Any]] = trace_payload.get("trace", []) or []
-    error_info: Dict[str, Any] | None = trace_payload.get("error")
-    source_loading_errors: List[Dict[str, Any]] = trace_payload.get("source_loading_errors", [])
-    stderr_text = trace_payload.get("stderr")
-    
-    # Iterative retry logic: if source loading failed, enhance again with error context
-    max_retries = 2
-    retry_count = 0
+    # Iterative repair loop
+    max_attempts = 5
+    attempt_count = 0
     current_sources = enhanced_source_entries
+    attempts_history: List[ExecutionAttempt] = []
+    final_trace_payload = {}
     
-    while source_loading_errors and retry_count < max_retries:
-        retry_count += 1
-        print(
-            f"[orchestrator] Source loading failed. Retry attempt {retry_count}/{max_retries} "
-            f"with error context enhancement...",
-            file=sys.stderr,
-        )
+    # Reason for the initial attempt (base enhancement)
+    initial_reasoning = "Initial enhancement to add missing imports and stubs."
+    if enhanced_sources_list:
+        initial_reasoning = enhanced_sources_list[0].reasoning
+    
+    while attempt_count < max_attempts:
+        attempt_count += 1
         
-        # Enhance again with error context
-        print(
-            f"[orchestrator] Re-enhancing sources with {len(source_loading_errors)} error(s) as context...",
-            file=sys.stderr,
-        )
-        re_enhanced_sources_list = agent.enhance_sources_for_execution(
-            sources=source_entries,  # Use original sources, not previously enhanced
-            error_context=source_loading_errors,
-        )
+        # Execute
+        trace_payload = _execute_with_sources(current_sources, attempt_num=attempt_count)
+        final_trace_payload = trace_payload
         
-        # Convert back to Dict format
-        current_sources = []
-        for enhanced in re_enhanced_sources_list:
-            print(
-                f"[orchestrator] Re-enhanced {enhanced.file_path}: "
-                f"added {len(enhanced.added_imports)} imports/stubs, "
-                f"reasoning: {enhanced.reasoning[:100]}...",
-                file=sys.stderr,
-            )
-            current_sources.append({
-                "file_path": enhanced.file_path,
-                "code": enhanced.enhanced_code,
-            })
-        
-        # Retry execution
-        trace_payload = _execute_with_sources(current_sources, attempt_num=retry_count + 1)
-        
-        # Check if retry succeeded
+        # Analyze result
         trace_entries = trace_payload.get("trace", []) or []
         error_info = trace_payload.get("error")
         source_loading_errors = trace_payload.get("source_loading_errors", [])
         stderr_text = trace_payload.get("stderr")
         
-        if not source_loading_errors:
-            print(
-                f"[orchestrator] Retry {retry_count} succeeded - sources loaded successfully!",
-                file=sys.stderr,
-            )
+        is_success = not source_loading_errors and not error_info
+        status = "success" if is_success else "error"
+        
+        # Construct error summary
+        error_summary = None
+        if source_loading_errors:
+            error_summary = f"Source loading failed: {source_loading_errors[0].get('message')}"
+        elif error_info:
+            error_summary = f"Runtime error: {error_info.get('message')}"
+            
+        # Record attempt
+        attempt = ExecutionAttempt(
+            attempt_number=attempt_count,
+            status=status,
+            error_summary=error_summary,
+            code_snapshot=current_sources,
+            reasoning=initial_reasoning if attempt_count == 1 else None # Will be updated for subsequent attempts
+        )
+        
+        # Update reasoning for the *previous* failed attempt that led to this one
+        if attempt_count > 1:
+            # The reasoning for this attempt comes from the fix applied after the previous failure
+            # We'll capture that in the loop logic below, but strictly speaking 
+            # the reasoning is associated with the fix generation.
+            pass
+            
+        attempts_history.append(attempt)
+        
+        if is_success:
+            print(f"[orchestrator] Attempt {attempt_count} succeeded!", file=sys.stderr)
             break
-        else:
+            
+        # If we failed and have retries left, try to fix
+        if attempt_count < max_attempts:
             print(
-                f"[orchestrator] Retry {retry_count} still has {len(source_loading_errors)} source loading error(s)",
+                f"[orchestrator] Attempt {attempt_count} failed. Enhancing with error context...",
                 file=sys.stderr,
             )
-    
-    if source_loading_errors:
-        print(
-            f"[orchestrator] WARNING: After {retry_count} retry attempt(s), "
-            f"{len(source_loading_errors)} source file(s) still failed to load:",
-            file=sys.stderr,
-        )
-    else:
-        print(
-            f"[orchestrator] All sources loaded successfully "
-            f"{f'after {retry_count} retry attempt(s)' if retry_count > 0 else ''}",
-            file=sys.stderr,
-        )
+            
+            # Combine all errors for context
+            context_errors = source_loading_errors or []
+            if error_info:
+                context_errors.append(error_info)
+                
+            re_enhanced_sources_list = agent.enhance_sources_for_execution(
+                sources=source_entries,  # Always start from base sources to apply cumulative fixes cleanly
+                error_context=context_errors,
+            )
+            
+            # Update current sources
+            current_sources = []
+            fix_reasoning = []
+            for enhanced in re_enhanced_sources_list:
+                current_sources.append({
+                    "file_path": enhanced.file_path,
+                    "code": enhanced.enhanced_code,
+                })
+                fix_reasoning.append(enhanced.reasoning)
+            
+            # Store reasoning on the current attempt record (which failed) to explain the *next* attempt
+            # Or store it on the next attempt? Let's store it on the next attempt.
+            # Actually, ExecutionAttempt has 'reasoning' field which we defined as "why this fix was applied".
+            # So for the next attempt object created, we want this reasoning.
+            initial_reasoning = "; ".join(fix_reasoning) 
+
+    # --- End of loop ---
+
+    # Prepare final results based on the last attempt (or successful one)
+    trace_entries = final_trace_payload.get("trace", []) or []
+    error_info = final_trace_payload.get("error")
+    source_loading_errors = final_trace_payload.get("source_loading_errors", [])
+    stderr_text = final_trace_payload.get("stderr")
     
     print(
         f"[orchestrator] trace_entries count: {len(trace_entries)}, "
         f"error_info: {error_info}",
     )
     
-    # Log source loading errors if any
+    # Log errors
     if source_loading_errors:
         for err in source_loading_errors:
-            error_type = err.get("error_type", "unknown")
-            file_path = err.get("file_path", "unknown")
-            message = err.get("message", "Unknown error")
-            print(
-                f"[orchestrator]   - {file_path}: {error_type} - {message[:150]}",
-                file=sys.stderr,
-            )
-            if error_type == "decorator_framework_error":
-                print(
-                    f"[orchestrator]     This is likely a framework decorator issue. "
-                    f"Stubs were provided but may need additional framework objects.",
-                    file=sys.stderr,
-                )
+            print(f"[orchestrator] Source error: {err.get('message')}", file=sys.stderr)
+    if error_info:
+         print(f"[orchestrator] Runtime error: {error_info.get('message')}", file=sys.stderr)
     
     if stderr_text:
         print("[orchestrator] runner stderr:\n", stderr_text)
@@ -455,43 +466,30 @@ def run_generated_test_through_tracer_and_analyze(
         runtime_states.append(snapshot)
 
     if not block_infos or not runtime_states:
-        # Provide rich diagnostics so it's easier to understand why nothing
-        # was analyzable (no trace at all vs. trace that didn't match blocks).
+        # ... (existing fallback logic for no trace) ...
         trace_block_ids = [
             entry.get("block_id")
             for entry in trace_entries
             if entry.get("block_id") is not None
         ]
-        print(
-            "[orchestrator] no executable blocks found; debug summary:",
-            {
-                "trace_entry_count": len(trace_entries),
-                "trace_block_ids_sample": trace_block_ids[:10],
-                "snapshot_pairs_count": len(snapshot_pairs),
-                "block_lookup_ids_sample": list(block_lookup.keys())[:10],
-            },
-        )
         
-        # Test failed before executing any blocks (e.g., syntax error, missing function call, source loading error)
-        # Check if we have source loading errors
+        # Logic to determine actual description and notes (reused from existing)
         if source_loading_errors:
-            # Prioritize source loading errors in the description
-            decorator_errors = [e for e in source_loading_errors if e.get("error_type") == "decorator_framework_error"]
-            if decorator_errors:
-                actual_description = (
-                    f"Source code failed to load due to framework decorator errors. "
-                    f"Files affected: {', '.join(e['file_path'] for e in decorator_errors)}. "
-                    f"Framework stubs were provided but may need additional objects. "
-                    f"Original error: {decorator_errors[0].get('message', 'Unknown')}"
-                )
-                notes = decorator_errors[0].get("traceback")
-            else:
-                actual_description = (
-                    f"Source code failed to load. "
-                    f"Files affected: {', '.join(e['file_path'] for e in source_loading_errors)}. "
-                    f"Errors: {source_loading_errors[0].get('message', 'Unknown error')}"
-                )
-                notes = source_loading_errors[0].get("traceback")
+             decorator_errors = [e for e in source_loading_errors if e.get("error_type") == "decorator_framework_error"]
+             if decorator_errors:
+                 actual_description = (
+                     f"Source code failed to load due to framework decorator errors. "
+                     f"Files affected: {', '.join(e['file_path'] for e in decorator_errors)}. "
+                     f"Framework stubs were provided but may need additional objects. "
+                     f"Original error: {decorator_errors[0].get('message', 'Unknown')}"
+                 )
+                 notes = decorator_errors[0].get("traceback")
+             else:
+                 actual_description = (
+                     f"Source code failed to load. "
+                     f"Errors: {source_loading_errors[0].get('message', 'Unknown error')}"
+                 )
+                 notes = source_loading_errors[0].get("traceback")
         elif error_info:
             actual_description = error_info.get("message", "Test failed before executing any code blocks")
             notes = error_info.get("traceback")
@@ -499,7 +497,6 @@ def run_generated_test_through_tracer_and_analyze(
             actual_description = "Test failed before executing any code blocks"
             notes = None
         
-        # Create a minimal debug analysis indicating no blocks were executed
         from .debug_analysis_llm import DebugAnalysis
         failed_test = FailedTest(
             name=test_case.name,
@@ -512,11 +509,9 @@ def run_generated_test_through_tracer_and_analyze(
             task_description=(
                 f"Test '{test_case.name}' failed before executing any code blocks. "
                 f"Error: {actual_description}. "
-                f"The test may be missing a function call or has a syntax error. "
-                f"Check that the test input includes the actual function invocation."
             ),
             failed_test=failed_test,
-            assessments=[],  # No blocks to assess since none were executed
+            assessments=[],
         )
         
         fallback_blocks: List[BlockInfo] = [
@@ -528,10 +523,11 @@ def run_generated_test_through_tracer_and_analyze(
         return LlmDebugRunResult(
             suite=suite,
             test_case=test_case,
-            trace_payload=trace_payload,
+            trace_payload=final_trace_payload,
             debug_analysis=debug_analysis,
             blocks=fallback_blocks,
             runtime_states=[],
+            attempts=attempts_history,
         )
 
     actual_description = (
@@ -559,10 +555,11 @@ def run_generated_test_through_tracer_and_analyze(
     return LlmDebugRunResult(
         suite=suite,
         test_case=test_case,
-        trace_payload=trace_payload,
+        trace_payload=final_trace_payload,
         debug_analysis=debug_analysis,
         blocks=block_infos,
         runtime_states=runtime_states,
+        attempts=attempts_history,
     )
 
 
@@ -752,6 +749,5 @@ def build_debugger_ui_payload(run_result: LlmDebugRunResult) -> Dict[str, object
         "nodes": nodes,
         "edges": edges,
         "analysis": run_result.debug_analysis.model_dump(),
+        "attempts": [a.to_dict() for a in run_result.attempts],
     }
-
-

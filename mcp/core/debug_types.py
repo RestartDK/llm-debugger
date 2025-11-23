@@ -3,8 +3,8 @@ Shared dataclasses and serialization helpers for the block tracing prototype.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from typing import Any, Dict, Iterable, Tuple
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 MAX_SERIALIZE_DEPTH = 2
 MAX_COLLECTION_ITEMS = 20
@@ -45,6 +45,21 @@ class TraceEntry:
             "line_no": self.line_no,
             "locals": self.locals,
         }
+
+
+@dataclass
+class ExecutionAttempt:
+    """
+    Record of a single code execution attempt during iterative repair.
+    """
+    attempt_number: int
+    status: str  # 'success' or 'error'
+    error_summary: Optional[str] = None
+    code_snapshot: List[Dict[str, str]] = field(default_factory=list)  # list of {file_path, code}
+    reasoning: Optional[str] = None  # why this fix was applied
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
 
 
 def serialize_value(value: Any, *, depth: int = 0) -> Any:
@@ -97,4 +112,3 @@ def build_exit_line_lookup(
     for block in blocks:
         lookup[(block.file_path, block.end_line)] = block.block_id
     return lookup
-

@@ -16,6 +16,7 @@ import type {
   TestSuite,
   TestCase,
   Analysis,
+  ExecutionAttempt,
 } from './lib/types';
 import {
   ResizablePanelGroup,
@@ -41,6 +42,7 @@ function App() {
   const [suite, setSuite] = useState<TestSuite | undefined>(undefined);
   const [testCase, setTestCase] = useState<TestCase | undefined>(undefined);
   const [analysis, setAnalysis] = useState<Analysis | undefined>(undefined);
+  const [attempts, setAttempts] = useState<ExecutionAttempt[] | undefined>(undefined);
 
   const leftPanelRef = useRef<ImperativePanelHandle>(null);
   
@@ -108,6 +110,7 @@ function App() {
     setSuite(payload.suite);
     setTestCase(payload.test_case);
     setAnalysis(payload.analysis);
+    setAttempts(payload.attempts);
 
     setNodes((prev) => mergeNodesWithAnalysis(prev, payload.nodes));
 
@@ -297,6 +300,7 @@ function App() {
             suite={suite}
             testCase={testCase}
             analysis={analysis}
+            attempts={attempts}
           />
         </ResizablePanel>
 
