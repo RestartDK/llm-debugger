@@ -11,6 +11,7 @@ from collections import deque
 from .mcp_tools import (
     submit_code_context
 )
+from .create_ctrlflow_json import generate_code_graph_from_context
 
 # Store active SSE connections and pending responses
 sse_connections: Dict[str, deque] = {}
@@ -243,20 +244,39 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
         tool_name = params.get("name", "")
         tool_args = params.get("arguments", {})
         
+        logger_instance.info(f"Processing tool call: {tool_name} with args keys: {list(tool_args.keys())}")
+        
+        # Debug: Log what attributes mcp_instance has
+        if mcp_instance:
+            logger_instance.info(f"mcp_instance type: {type(mcp_instance)}")
+            logger_instance.info(f"mcp_instance attributes: {[attr for attr in dir(mcp_instance) if not attr.startswith('__')]}")
+            if hasattr(mcp_instance, '_tools'):
+                logger_instance.info(f"mcp_instance._tools: {list(mcp_instance._tools.keys()) if hasattr(mcp_instance._tools, 'keys') else mcp_instance._tools}")
+            # FastMCP might use different attribute names - check common ones
+            for attr_name in ['_tools', 'tools', 'registered_tools']:
+                if hasattr(mcp_instance, attr_name):
+                    attr_value = getattr(mcp_instance, attr_name)
+                    logger_instance.info(f"mcp_instance.{attr_name}: {attr_value}")
+        
         # Try to use FastMCP's tool if available, otherwise fall back to manual handling
         if mcp_instance and hasattr(mcp_instance, '_tools') and tool_name in mcp_instance._tools:
+            logger_instance.info(f"Using FastMCP tool discovery for {tool_name}")
             try:
                 import inspect
                 tool_func = mcp_instance._tools[tool_name]
+                logger_instance.info(f"Tool function found: {tool_func}, is_async={inspect.iscoroutinefunction(tool_func)}")
                 # Handle both sync and async tools
                 if inspect.iscoroutinefunction(tool_func):
                     import asyncio
                     # If it's async, we need to run it in the event loop
                     # But since we're in an async function, we can await it
+                    logger_instance.info(f"Calling async tool {tool_name}")
                     result = await tool_func(**tool_args)
                 else:
                     # Synchronous function - call directly
+                    logger_instance.info(f"Calling synchronous tool {tool_name} - this will block until complete")
                     result = tool_func(**tool_args)
+                    logger_instance.info(f"Tool {tool_name} completed with result length: {len(str(result))}")
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,
@@ -265,13 +285,17 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
                     }
                 }
             except Exception as e:
+                logger_instance.error(f"FastMCP tool execution failed for {tool_name}: {str(e)}", exc_info=True)
                 return {
                     "jsonrpc": "2.0",
                     "id": request_id,
                     "error": {"code": -32603, "message": f"Tool execution error: {str(e)}"}
                 }
+        else:
+            logger_instance.warning(f"FastMCP tool discovery failed for {tool_name}. mcp_instance={mcp_instance is not None}, has_tools={hasattr(mcp_instance, '_tools') if mcp_instance else False}, tool_in_tools={tool_name in mcp_instance._tools if (mcp_instance and hasattr(mcp_instance, '_tools')) else False}")
         
-        # Manual tool handling (for SSE mode)
+        # Manual tool handling (fallback if FastMCP discovery fails)
+        # Try to import and call the actual tool function from main.py
         if tool_name == "submit_code_context_mcp":
             text = tool_args.get("text", "")
             if not text:
@@ -280,14 +304,42 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
                     "id": request_id,
                     "error": {"code": -32602, "message": "Missing required parameter: text"}
                 }
-            result = submit_code_context(text)
-            return {
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "result": {
-                    "content": [{"type": "text", "text": result}]
+            try:
+                # Try to import the actual tool function from main module
+                # This ensures we execute the exact same code as the FastMCP tool
+                import sys
+                import importlib
+                if 'main' in sys.modules:
+                    main_module = sys.modules['main']
+                    if hasattr(main_module, 'submit_code_context_mcp'):
+                        logger_instance.info("Calling submit_code_context_mcp from main module (manual fallback)")
+                        tool_func = getattr(main_module, 'submit_code_context_mcp')
+                        result = tool_func(text)
+                        return {
+                            "jsonrpc": "2.0",
+                            "id": request_id,
+                            "result": {
+                                "content": [{"type": "text", "text": str(result)}]
+                            }
+                        }
+                
+                # Fallback: call graph generation directly if main module not available
+                logger_instance.warning("main module not available, calling generate_code_graph_from_context directly")
+                result = generate_code_graph_from_context(text)
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {
+                        "content": [{"type": "text", "text": json.dumps(result)}]
+                    }
                 }
-            }
+            except Exception as e:
+                logger_instance.error(f"Error in manual tool handler for {tool_name}: {str(e)}", exc_info=True)
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {"code": -32603, "message": f"Tool execution error: {str(e)}"}
+                }
         
         else:
             return {
