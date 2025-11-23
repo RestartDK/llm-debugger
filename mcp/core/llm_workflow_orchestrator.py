@@ -952,8 +952,12 @@ Your task: Generate a comprehensive final analysis that includes:
    - If passed: what made it work
    - If failed: what still needs to be fixed
 
-Format your response as clear, structured text with sections and bullet points.
-Keep it concise but comprehensive.
+CRITICAL OUTPUT FORMAT REQUIREMENTS:
+- You MUST provide your response as plain text (NOT JSON structured output)
+- Do NOT use tool choice or structured output format
+- Return ONLY the text content directly
+- Format your response as clear, structured text with sections and bullet points.
+- Keep it concise but comprehensive.
 """
     
     url = "https://api.groq.com/openai/v1/chat/completions"
@@ -1079,7 +1083,11 @@ CRITICAL:
 - Avoid repeating fixes that were already tried (see execution history)
 - Provide clear before/after code snippets for each fix
 
-Format your response as structured text following this format:
+CRITICAL OUTPUT FORMAT REQUIREMENTS:
+- You MUST provide your response as plain text (NOT JSON structured output)
+- Do NOT use tool choice or structured output format
+- Return ONLY the text content directly
+- Format your response as structured text following this format:
 
 [Fix Instructions]
 WHAT TO DO:

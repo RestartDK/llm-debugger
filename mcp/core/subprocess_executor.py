@@ -73,7 +73,12 @@ Generate a complete Python script string that:
 - Includes the test code
 - Can be executed via `python -c "your_script_here"`
 
-Return ONLY the Python code string, no explanations or markdown formatting.
+CRITICAL OUTPUT FORMAT REQUIREMENTS:
+- You MUST provide your response as plain text (NOT JSON structured output)
+- Do NOT use tool choice or structured output format
+- Return ONLY the Python code string directly
+- Do NOT include explanations, markdown formatting, or code blocks
+- Return ONLY the raw Python code string
 """
     return prompt
 
@@ -110,7 +115,12 @@ Your task: Generate a FIXED version of the Python script that:
 3. Still uses NO external dependencies (only standard library)
 4. Is completely self-contained and executable via `python -c "..."`
 
-Return ONLY the fixed Python code string, no explanations or markdown formatting.
+CRITICAL OUTPUT FORMAT REQUIREMENTS:
+- You MUST provide your response as plain text (NOT JSON structured output)
+- Do NOT use tool choice or structured output format
+- Return ONLY the fixed Python code string directly
+- Do NOT include explanations, markdown formatting, or code blocks
+- Return ONLY the raw Python code string
 """
     return prompt
 
