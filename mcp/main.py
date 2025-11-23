@@ -340,22 +340,47 @@ async def sse_post(request: Request):
     return await sse_message(request)
 
 
+def _extract_connection_id(request: Request, payload: dict) -> str | None:
+    """Extract connection_id from multiple possible locations."""
+    return (
+        payload.get("connection_id")
+        or payload.get("params", {}).get("connection_id")
+        or request.headers.get("x-connection-id")
+        or request.headers.get("X-Connection-ID")
+        or request.query_params.get("connection_id")
+        or request.cookies.get("mcp_connection_id")
+    )
+
+
 @app.post("/sse/message")
 async def sse_message(request: Request):
     """Handle MCP JSON-RPC messages sent over HTTP and echo them to the SSE stream."""
     payload = await request.json()
-    connection_id = payload.get("connection_id")
-    if not connection_id:
-        logger.warning("SSE message received without connection_id: %s", payload)
-        return JSONResponse({"error": "missing connection_id"}, status_code=400)
+    connection_id = _extract_connection_id(request, payload)
 
-    queue = _active_connections.get(connection_id)
-    if queue is None:
+    if not connection_id and _active_connections:
+        # Fall back to the first active connection (single-client scenario)
+        connection_id = next(iter(_active_connections))
+        logger.warning(
+            "No connection_id supplied; using first active connection %s. "
+            "Consider ensuring clients include X-Connection-ID.",
+            connection_id,
+        )
+    elif not connection_id:
+        logger.warning(
+            "SSE message received without connection_id and no active connections yet: %s",
+            payload,
+        )
+
+    queue = _active_connections.get(connection_id) if connection_id else None
+    if connection_id and queue is None:
         logger.warning("SSE message for unknown connection_id: %s", connection_id)
-        return JSONResponse({"error": "unknown connection_id"}, status_code=400)
 
     result = await sse_message_handler(request, mcp_instance=mcp)
-    await queue.put(result)
+
+    if queue is not None:
+        await queue.put(result)
+
     return JSONResponse(result)
 
 
