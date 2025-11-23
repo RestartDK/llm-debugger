@@ -358,7 +358,7 @@ def run_generated_test_through_tracer_and_analyze(
     # Convert EnhancedSource objects back to Dict format for payload
     enhanced_source_entries = []
     for enhanced in enhanced_sources_list:
-    print(
+        print(
             f"[orchestrator] Enhanced {enhanced.file_path}: "
             f"added {len(enhanced.added_imports)} imports/stubs, "
             f"reasoning: {enhanced.reasoning[:100]}...",
@@ -496,7 +496,7 @@ def run_generated_test_through_tracer_and_analyze(
         error_info = trace_payload.get("error")
         test_execution_error = trace_payload.get("test_execution_error")
         source_loading_errors = trace_payload.get("source_loading_errors", [])
-    stderr_text = trace_payload.get("stderr")
+        stderr_text = trace_payload.get("stderr")
         stdout_text = trace_payload.get("stdout", "")
         returncode = trace_payload.get("returncode", -1)
         
@@ -635,21 +635,21 @@ def run_generated_test_through_tracer_and_analyze(
         
         # Logic to determine actual description and notes (reused from existing)
         if source_loading_errors:
-             decorator_errors = [e for e in source_loading_errors if e.get("error_type") == "decorator_framework_error"]
-             if decorator_errors:
-        actual_description = (
-                     f"Source code failed to load due to framework decorator errors. "
-                     f"Files affected: {', '.join(e['file_path'] for e in decorator_errors)}. "
-                     f"Framework stubs were provided but may need additional objects. "
-                     f"Original error: {decorator_errors[0].get('message', 'Unknown')}"
-                 )
-                 notes = decorator_errors[0].get("traceback")
-             else:
-                 actual_description = (
-                     f"Source code failed to load. "
-                     f"Errors: {source_loading_errors[0].get('message', 'Unknown error')}"
-                 )
-                 notes = source_loading_errors[0].get("traceback")
+            decorator_errors = [e for e in source_loading_errors if e.get("error_type") == "decorator_framework_error"]
+            if decorator_errors:
+                actual_description = (
+                    f"Source code failed to load due to framework decorator errors. "
+                    f"Files affected: {', '.join(e['file_path'] for e in decorator_errors)}. "
+                    f"Framework stubs were provided but may need additional objects. "
+                    f"Original error: {decorator_errors[0].get('message', 'Unknown')}"
+                )
+                notes = decorator_errors[0].get("traceback")
+            else:
+                actual_description = (
+                    f"Source code failed to load. "
+                    f"Errors: {source_loading_errors[0].get('message', 'Unknown error')}"
+                )
+                notes = source_loading_errors[0].get("traceback")
         elif error_info:
             actual_description = error_info.get("message", "Test failed before executing any code blocks")
             notes = error_info.get("traceback")
