@@ -118,6 +118,8 @@ class LlmDebugRunResult:
     test_case: GeneratedTestCase
     trace_payload: Dict[str, Any]
     debug_analysis: DebugAnalysis
+    blocks: List[BlockInfo]
+    runtime_states: List[RuntimeStateSnapshot]
 
 
 def run_generated_test_through_tracer_and_analyze(
@@ -204,6 +206,129 @@ def run_generated_test_through_tracer_and_analyze(
         test_case=test_case,
         trace_payload=trace_payload,
         debug_analysis=debug_analysis,
+        blocks=block_infos,
+        runtime_states=runtime_states,
     )
+
+
+def build_debugger_ui_payload(run_result: LlmDebugRunResult) -> Dict[str, object]:
+    """
+    Convert an LlmDebugRunResult into a Branch/frontend friendly payload.
+    """
+
+    trace_entries: List[Dict[str, Any]] = (
+        run_result.trace_payload.get("trace", []) or []
+    )
+    block_lookup: Dict[str, BlockInfo] = {block.id: block for block in run_result.blocks}
+
+    # Build RuntimeStep-like structures from trace entries
+    steps: List[Dict[str, Any]] = []
+    previous_locals: Dict[str, Any] = {}
+    ordered_trace = sorted(trace_entries, key=lambda entry: entry.get("step_index", 0))
+    for entry in ordered_trace:
+        block_id = entry.get("block_id")
+        if not block_id:
+            continue
+        block = block_lookup.get(block_id)
+        step_index = entry.get("step_index", 0)
+        current_locals = entry.get("locals", {}) or {}
+        step = {
+            "id": f"{block_id}-step-{step_index}",
+            "blockId": block_id,
+            "blockName": block_id,
+            "codeSnippet": block.code if block else "",
+            "before": dict(previous_locals),
+            "after": dict(current_locals),
+            "status": "succeeded",
+        }
+        steps.append(step)
+        previous_locals = current_locals
+
+    # Identify incorrect blocks from LLM analysis to build problems + mark failures
+    incorrect_blocks: Dict[str, str] = {}
+    for assessment in run_result.debug_analysis.assessments:
+        if assessment.correct:
+            continue
+        label = assessment.block
+        try:
+            idx = int(label.split("-")[-1])
+        except ValueError:
+            continue
+        if 0 <= idx < len(run_result.blocks):
+            block_id = run_result.blocks[idx].id
+            incorrect_blocks[block_id] = assessment.explanation
+
+    problems: List[Dict[str, Any]] = []
+    for idx, (block_id, explanation) in enumerate(incorrect_blocks.items()):
+        step = next((candidate for candidate in steps if candidate["blockId"] == block_id), None)
+        problems.append(
+            {
+                "id": f"prob-{idx}",
+                "blockId": block_id,
+                "stepId": step["id"] if step else "",
+                "description": explanation,
+                "severity": "error",
+            }
+        )
+        if step:
+            step["status"] = "failed"
+            step["error"] = explanation
+
+    # Build CFG nodes (basic placeholders) and attach execution counts
+    execution_counts: Dict[str, int] = {}
+    for step in steps:
+        execution_counts[step["blockId"]] = execution_counts.get(step["blockId"], 0) + 1
+
+    nodes: List[Dict[str, Any]] = []
+    for block in run_result.blocks:
+        block_id = block.id
+        nodes.append(
+            {
+                "id": block_id,
+                "type": "cfgNode",
+                "position": {"x": 0, "y": 0},
+                "data": {
+                    "blockId": block_id,
+                    "blockName": block_id,
+                    "codeSnippet": block.code,
+                    "status": "failed" if block_id in incorrect_blocks else "succeeded",
+                    "file": block.file_path,
+                    "lineStart": block.start_line,
+                    "lineEnd": block.end_line,
+                    "executionCount": execution_counts.get(block_id, 0),
+                },
+            }
+        )
+
+    # Build simple sequential edges per file (placeholder CFG)
+    edges: List[Dict[str, Any]] = []
+    prev_block_for_file: Dict[str, str] = {}
+    sorted_blocks = sorted(
+        run_result.blocks,
+        key=lambda block: ((block.file_path or ""), block.start_line or 0),
+    )
+    for block in sorted_blocks:
+        file_path = block.file_path or ""
+        prev_block = prev_block_for_file.get(file_path)
+        if prev_block:
+            edges.append(
+                {
+                    "id": f"edge-{prev_block}-{block.id}",
+                    "source": prev_block,
+                    "target": block.id,
+                }
+            )
+        prev_block_for_file[file_path] = block.id
+
+    return {
+        "suite": run_result.suite.model_dump(),
+        "test_case": run_result.test_case.model_dump(),
+        "trace": trace_entries,
+        "steps": steps,
+        "problems": problems,
+        "nodes": nodes,
+        "edges": edges,
+        "analysis": run_result.debug_analysis.model_dump(),
+    }
 
 
