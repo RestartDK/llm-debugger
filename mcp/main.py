@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 # Import from core package
 from core import sse_message_handler, submit_code_context
 from core.create_ctrlflow_json import generate_code_graph_from_context
-from dummy_cfg import HARDCODED_CODE_GRAPH
 
 # Import from api package
 from api import get_control_flow_diagram, execute_test_cases, send_debugger_response
@@ -249,10 +248,11 @@ async def health():
 def get_control_flow_diagram_endpoint():
     """Return the latest control-flow graph snapshot.
 
-    Uses the dummy ecommerce pipeline until real projects are wired in, but
-    the response already matches the frontend's Node<CfgNodeData>/Edge types.
+    Reads the most recent JSON file from the contexts/ folder that matches
+    the timestamp pattern YYYY-MM-DD_HH-MM.json.
+    The response matches the frontend's Node<CfgNodeData>/Edge types.
     """
-    logger.info("GET /get_control_flow_diagram - Building CFG via dummy pipeline")
+    logger.info("GET /get_control_flow_diagram - Reading CFG from most recent context JSON")
     diagram = get_control_flow_diagram()
     logger.info(
         "GET /get_control_flow_diagram - nodes=%d edges=%d",
