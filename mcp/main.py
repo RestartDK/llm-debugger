@@ -16,8 +16,10 @@ logger = logging.getLogger(__name__)
 from core import (
     sse_endpoint_handler,
     sse_message_handler,
-    submit_code_context
+    submit_code_context,
+    send_progress_update
 )
+from core.create_ctrlflow_json import generate_code_graph_from_context
 
 # Import from api package
 from api import (
@@ -108,7 +110,39 @@ def submit_code_context_mcp(text: str) -> str:
             result.append(item * 2)
         return result
     """
-    return submit_code_context(text)
+    # Try to get connection_id from thread-local storage or context
+    # For now, we'll attempt to get it but proceed even if None
+    # Note: FastMCP tools don't have direct access to request context,
+    # so connection_id may be None in stdio mode
+    connection_id = getattr(threading.current_thread(), 'mcp_connection_id', None)
+    
+    # Create progress callback that sends SSE updates
+    def progress_callback(stage: str, message: str, progress: float):
+        send_progress_update(connection_id, stage, message, progress)
+        logger.info(f"Progress: {stage} - {message} ({progress:.1%})")
+    
+    # Generate graph from context
+    try:
+        result = generate_code_graph_from_context(
+            text,
+            progress_callback=progress_callback
+        )
+        
+        # TODO: Add workflow orchestration functionality here
+        # - Trigger UI updates
+        # - Notify other services
+        # - Handle graph processing pipeline
+        
+        return json.dumps(result)
+    except Exception as e:
+        error_msg = f"Error generating graph: {str(e)}"
+        logger.error(error_msg)
+        if connection_id:
+            send_progress_update(connection_id, "error", error_msg, 0.0)
+        return json.dumps({
+            "status": "error",
+            "message": error_msg
+        })
 
 # Create FastAPI app
 app = FastAPI(title="Debug Context MCP Server", description="MCP server for code debugging context")

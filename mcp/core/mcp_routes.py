@@ -2,6 +2,7 @@
 MCP protocol route handlers (SSE endpoints).
 """
 import json
+import logging
 from fastapi import Request
 from fastapi.responses import StreamingResponse
 import asyncio
@@ -13,6 +14,40 @@ from .mcp_tools import (
 
 # Store active SSE connections and pending responses
 sse_connections: Dict[str, deque] = {}
+
+
+def send_progress_update(
+    connection_id: Optional[str],
+    stage: str,
+    message: str,
+    progress: float
+) -> None:
+    """
+    Send progress update via SSE if connection available.
+    
+    Args:
+        connection_id: SSE connection ID (if None, update is ignored)
+        stage: Current stage identifier (e.g., "creating_nodes", "creating_edges")
+        message: Human-readable progress message
+        progress: Progress value between 0.0 and 1.0
+    """
+    if not connection_id or connection_id not in sse_connections:
+        # No connection available, just log
+        logger = logging.getLogger(__name__)
+        logger.debug(f"Progress update (no connection): {stage} - {message} ({progress:.1%})")
+        return
+    
+    progress_message = {
+        "jsonrpc": "2.0",
+        "method": "progress",
+        "params": {
+            "stage": stage,
+            "message": message,
+            "progress": progress
+        }
+    }
+    
+    sse_connections[connection_id].append(progress_message)
 
 
 def get_tools_list_schema() -> dict:
@@ -108,8 +143,8 @@ async def sse_message_handler(request: Request, mcp_instance=None) -> dict:
         # Get connection ID from header (Cursor may send this)
         connection_id = request.headers.get("x-connection-id") or request.query_params.get("connection_id")
         
-        # Process the request and get response
-        response = await process_mcp_request(method, params, request_id, mcp_instance)
+        # Process the request and get response (pass connection_id for progress updates)
+        response = await process_mcp_request(method, params, request_id, mcp_instance, connection_id=connection_id)
         
         # If we have a connection ID, also queue response for SSE stream
         if connection_id and connection_id in sse_connections:
@@ -126,7 +161,7 @@ async def sse_message_handler(request: Request, mcp_instance=None) -> dict:
         return error_response
 
 
-async def process_mcp_request(method: str, params: dict, request_id: Optional[int], mcp_instance=None) -> dict:
+async def process_mcp_request(method: str, params: dict, request_id: Optional[int], mcp_instance=None, connection_id: Optional[str] = None) -> dict:
     """Process an MCP request and return the response.
     
     Args:
@@ -134,7 +169,14 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
         params: Method parameters
         request_id: Request ID
         mcp_instance: Optional FastMCP instance for tool discovery
+        connection_id: Optional SSE connection ID for progress updates
     """
+    import threading
+    
+    # Store connection_id in thread-local storage so tools can access it
+    if connection_id:
+        threading.current_thread().mcp_connection_id = connection_id
+    
     # Handle MCP tool call
     if method == "tools/call":
         tool_name = params.get("name", "")
