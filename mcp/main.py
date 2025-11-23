@@ -7,7 +7,9 @@ Can be run as an MCP server (stdio) or as a FastAPI HTTP server with SSE support
 import asyncio
 import json
 import logging
+import os
 import uuid
+from datetime import datetime
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -295,6 +297,44 @@ async def execute_test_cases_endpoint(request: Request):
         # This prevents issues if execute_test_cases() or its dependencies use asyncio.run()
         result = await asyncio.to_thread(execute_test_cases, data)
         logger.info(f"POST /execute_test_cases - Response: {result}")
+        
+        # Save lessons learned and instructions to local storage
+        try:
+            # Extract final_analysis and build instruction content
+            final_analysis = result.get("final_analysis", "")
+            task_description = data.get("task_description", "Test execution results")
+            
+            # Build instruction content with lessons learned
+            instruction_content = f"""[Task Description]
+{task_description}
+
+[Lessons Learned]
+{final_analysis if final_analysis else "No final analysis available."}
+
+[Test Results Summary]
+Suite: {result.get('suite', {}).get('target_function', 'N/A')}
+Test Case: {result.get('test_case', {}).get('name', 'N/A')}
+Status: {'PASSED' if result.get('trace', {}).get('ok', False) else 'FAILED'}
+"""
+            
+            # Ensure instructions directory exists
+            output_dir = "instructions"
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Generate filename with timestamp: YY-MM-DD_HH-MM.txt
+            timestamp = datetime.now().strftime("%y-%m-%d_%H-%M")
+            filename = f"{timestamp}.txt"
+            filepath = os.path.join(output_dir, filename)
+            
+            # Write instruction file
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(instruction_content)
+            
+            logger.info(f"POST /execute_test_cases - Saved instructions to {filepath}")
+        except Exception as e:
+            logger.error(f"POST /execute_test_cases - Failed to save instructions: {str(e)}")
+            # Continue even if saving fails
+        
         return result
     except Exception as e:
         logger.error(f"POST /execute_test_cases - Error: {str(e)}")
