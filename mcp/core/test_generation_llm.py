@@ -58,12 +58,12 @@ def _extract_target_function_from_code(code_snippet: str) -> Optional[str]:
 def build_test_code_prompt(code_snippet: str, context: Optional[str] = None) -> str:
     """
     Build a prompt for generating raw test code (unstructured output).
-    Focuses on generating standalone, executable test code in test class format.
+    Focuses on generating standalone, executable Python code blocks (NOT unittest classes).
     """
     extra_context = f"\nAdditional context:\n{context.strip()}" if context else ""
 
     prompt = f"""
-You are a senior Python engineer creating tests for the following code.
+You are a senior Python engineer creating simple tests for the following code.
 
 Code under test:
 ```python
@@ -71,47 +71,50 @@ Code under test:
 ```
 {extra_context}
 
-Your task: Generate standalone, executable test code in a test class format.
+Your task: Generate standalone, executable Python test code as simple code blocks.
 
-Requirements:
-1. Create a test class named `TestSuite` with multiple test methods
-2. Each test method should be named `test_*` (e.g., `test_normal_case`, `test_edge_case`)
-3. Generate 3-7 test cases covering:
+CRITICAL REQUIREMENTS:
+1. NO classes, NO `self`, NO unittest framework - just standalone Python code blocks
+2. Each test should be a simple code block that can run independently
+3. Generate 3-7 simple test cases covering:
    - Normal flow scenarios
    - Edge cases (empty inputs, boundary values)
    - Error paths (invalid inputs, exception handling)
-4. Each test method MUST:
-   - Invoke the target function explicitly
-   - Assign the call to a variable named `result` (e.g., `result = my_func(...)`)
-   - Include assertions on `result` or its fields
+4. Each test block MUST:
+   - Set up any necessary mocks/stubs before calling the function
+   - Call the target function and assign to `result` (e.g., `result = my_func(...)`)
+   - Use simple `assert` statements (e.g., `assert result == expected_value`)
+   - You can add random logic before and after the code being tested to make tests work
 5. Tests must be STANDALONE and self-contained:
-   - Mock ALL external dependencies (imports, globals, classes) within the test class
+   - Mock ALL external dependencies (imports, globals, classes) within each test block
    - Do NOT assume any imports exist unless standard library
-   - Use `unittest.mock` or create stub classes/functions for missing dependencies
-   - "Bring your own mocks": If the code uses `requests.get`, mock it. If it uses `MyClass`, define a stub `MyClass` in the test class
-6. Include all necessary imports and mocks at the top of the test class
-7. Each test method should be self-contained and executable independently
+   - Create stub classes/functions inline if needed
+   - "Bring your own mocks": If the code uses `requests.get`, mock it. If it uses `MyClass`, define a stub `MyClass` in the test block
+6. Separate each test with clear comments like `# Test 1: normal case` or `# Test 2: edge case`
+7. Keep tests SIMPLE - just verify "will this run" - no fancy logic needed
 
 Format your response as Python code only. Do not include any explanation or metadata - just the test code.
 
 Example structure:
 ```python
-import unittest
-from unittest.mock import Mock, patch
+# Test 1: normal case
+# Mock any dependencies here
+result = my_function("input")
+assert result == "expected"
 
-class TestSuite:
-    def test_normal_case(self):
-        # Setup mocks if needed
-        # Call function
-        result = my_function(...)
-        # Assertions
-        assert result == expected_value
-    
-    def test_edge_case(self):
-        # ...
+# Test 2: edge case
+result = my_function("")
+assert result is not None
+
+# Test 3: error case
+try:
+    result = my_function(None)
+    assert False, "Should have raised error"
+except ValueError:
+    pass
 ```
 
-Now generate the test code:
+Now generate the simple standalone test code:
 """
     return dedent(prompt).strip()
 
@@ -143,6 +146,7 @@ def build_metadata_extraction_prompt(
 ) -> str:
     """
     Build a prompt for extracting structured metadata from generated test code.
+    Tests are standalone Python code blocks, not class methods.
     """
     if target_function is None:
         target_function = _extract_target_function_from_code(original_code_snippet) or "unknown"
@@ -162,23 +166,25 @@ Generated test code:
 
 Target function: {target_function}
 
-Your task: Analyze the generated test code and extract structured metadata for each test method.
+Your task: Analyze the generated test code and extract structured metadata for each test block.
 
-For each test method in the TestSuite class, extract:
-1. **name**: The test method name (e.g., "test_normal_case")
+The test code consists of standalone Python code blocks (NOT class methods). Each test block is separated by comments or blank lines.
+
+For each test block, extract:
+1. **name**: A descriptive name based on the test comment or logic (e.g., "normal_case", "edge_case_empty_input")
 2. **description**: What behavior or edge case this test covers (infer from test logic/comments)
-3. **input**: The test setup code and function call (the code that prepares inputs and calls the target function)
+3. **input**: The test setup code and function call (the code that prepares inputs and calls the target function, including any mocks/stubs)
 4. **expected_output**: The assertions or expected results (MUST be a string, never null. Extract all assert statements or expected values. If no assertions found, use empty string "")
-5. **notes**: Any special setup/teardown, mocks, or fixtures used (optional)
+5. **notes**: Any special setup, mocks, or fixtures used (optional)
 
 CRITICAL: You MUST provide structured output matching this exact JSON schema:
 {{
   "target_function": "string (required - the function being tested)",
   "summary": "string (required - high-level coverage summary)",
-  "test_style": "pytest|unittest|doctest|custom (required)",
+  "test_style": "standalone|custom (required - use 'standalone' since these are not unittest/pytest)",
   "tests": [
     {{
-      "name": "string (required - test method name)",
+      "name": "string (required - descriptive test name)",
       "description": "string (required - what the test verifies)",
       "input": "string (required - setup code and function call)",
       "expected_output": "string (REQUIRED - must be a string, never null. Extract assertions or expected results. Use empty string '' if no assertions found)",
@@ -193,8 +199,9 @@ IMPORTANT STRUCTURED OUTPUT RULES:
 - The "expected_output" field should contain the actual assertion statements or expected results as a string (e.g., "assert result == 5" or "assert result is None")
 - Ensure all string fields are actual strings, not null values
 - Match the schema types exactly: strings must be strings, lists must be lists, etc.
-- Extract the "input" field as the code that sets up the test and calls the target function
+- Extract the "input" field as the code that sets up the test (including mocks) and calls the target function
 - Extract the "expected_output" field as the assertion statements or expected results from the test
+- The test code does NOT use classes or `self` - it's standalone Python code blocks
 
 Analyze the test code and provide the structured output:
 """
