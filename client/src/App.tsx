@@ -3,6 +3,7 @@ import type { Edge, Node } from '@xyflow/react';
 import { LeftPanel } from './components/LeftPanel';
 import { CfgCanvas } from './components/CfgCanvas';
 import { executeTestCases, fetchControlFlow } from './lib/api';
+import { layoutCfgNodes } from './lib/utils';
 import type {
   CfgNodeData,
   Problem,
@@ -146,10 +147,28 @@ function App() {
         const diagram = await fetchControlFlow();
         console.log('[App] Control flow diagram loaded:', diagram);
         if (cancelled) return;
-        setNodes(diagram.nodes);
+        
+        // Ensure nodes have positions (React Flow requirement)
+        // If nodes don't have positions, apply layout function
+        const nodesWithPositions = diagram.nodes.map((node) => {
+          // If node already has a position, use it; otherwise layout will add one
+          if (!node.position || typeof node.position.x !== 'number' || typeof node.position.y !== 'number') {
+            // Return node with temporary position - layoutCfgNodes will fix it
+            return {
+              ...node,
+              position: node.position || { x: 0, y: 0 },
+            };
+          }
+          return node;
+        });
+        
+        // Apply layout to ensure all nodes have proper positions
+        const laidOutNodes = layoutCfgNodes(nodesWithPositions, diagram.edges);
+        
+        setNodes(laidOutNodes);
         setEdges(diagram.edges);
-        if (diagram.nodes.length > 0) {
-          setActiveNodeId(diagram.nodes[0].id);
+        if (laidOutNodes.length > 0) {
+          setActiveNodeId(laidOutNodes[0].id);
         }
       } catch (error) {
         console.error('[App] Error loading control flow:', error);
