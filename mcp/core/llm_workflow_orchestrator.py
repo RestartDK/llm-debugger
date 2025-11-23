@@ -121,6 +121,15 @@ class LlmDebugRunResult:
     blocks: List[BlockInfo]
     runtime_states: List[RuntimeStateSnapshot]
 
+def apply_suggested_fixes_to_source(
+    
+    agent: LlmDebugAgent,
+    task_description: str,
+    instructions: str,
+) -> None:
+    
+    
+    return
 
 def run_generated_test_through_tracer_and_analyze(
     *,
