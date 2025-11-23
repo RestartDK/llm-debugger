@@ -42,10 +42,7 @@ class LlmDebugAgent:
             self._agent = agent
             return
 
-        model = GroqModel(
-            model_name,
-            api_key=os.getenv("GROQ_API_KEY"),
-        )
+        model = GroqModel(model_name)
         self._agent = PydanticAgent(model)
 
     @property
