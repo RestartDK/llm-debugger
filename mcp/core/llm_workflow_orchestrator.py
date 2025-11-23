@@ -15,10 +15,6 @@ from .debug_types import BasicBlock
 from .dummy_cfg import get_dummy_blocks, get_dummy_sources
 from .mcp_tools import build_runner_payload, run_with_block_tracing_subprocess
 from .test_generation_llm import GeneratedTestCase, GeneratedTestSuite
-import os
-import re
-from pathlib import Path
-from datetime import datetime
 from textwrap import dedent as _dedent
 import asyncio
 from . import mcp_routes
@@ -251,9 +247,24 @@ def run_generated_test_through_tracer_and_analyze(
         blocks=block_entries,
         tests=tests_code,
     )
+    print(
+        "[orchestrator] runner payload summary:",
+        {
+            "sources": [entry["file_path"] for entry in source_entries],
+            "blocks": [block.block_id for block in block_entries],
+            "tests_code_preview": tests_code[:200],
+        },
+    )
     trace_payload = run_with_block_tracing_subprocess(payload=payload)
     trace_entries: List[Dict[str, Any]] = trace_payload.get("trace", []) or []
     error_info: Dict[str, Any] | None = trace_payload.get("error")
+    stderr_text = trace_payload.get("stderr")
+    print(
+        f"[orchestrator] trace_entries count: {len(trace_entries)}, "
+        f"error_info: {error_info}",
+    )
+    if stderr_text:
+        print("[orchestrator] runner stderr:\n", stderr_text)
 
     block_lookup = _build_block_info_lookup(block_entries, source_entries)
     snapshot_pairs = _build_runtime_snapshots_from_trace(trace_entries)
@@ -268,6 +279,22 @@ def run_generated_test_through_tracer_and_analyze(
         runtime_states.append(snapshot)
 
     if not block_infos or not runtime_states:
+        # Provide rich diagnostics so it's easier to understand why nothing
+        # was analyzable (no trace at all vs. trace that didn't match blocks).
+        trace_block_ids = [
+            entry.get("block_id")
+            for entry in trace_entries
+            if entry.get("block_id") is not None
+        ]
+        print(
+            "[orchestrator] no executable blocks found; debug summary:",
+            {
+                "trace_entry_count": len(trace_entries),
+                "trace_block_ids_sample": trace_block_ids[:10],
+                "snapshot_pairs_count": len(snapshot_pairs),
+                "block_lookup_ids_sample": list(block_lookup.keys())[:10],
+            },
+        )
         raise RuntimeError("Trace did not yield any executable blocks to analyze.")
 
     actual_description = (

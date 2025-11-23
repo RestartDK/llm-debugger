@@ -3,6 +3,7 @@ MCP Debug Context Server
 Accepts code changes from Cursor, stores project context and code chunk debugging information.
 Can be run as an MCP server (stdio) or as a FastAPI HTTP server with SSE support.
 """
+
 import asyncio
 import json
 import logging
@@ -21,19 +22,12 @@ logger = logging.getLogger(__name__)
 # Payload is stored in dummy_cfg.HARDCODED_CODE_GRAPH so deployments do not rely on copying a JSON file.
 
 # Import from core package
-from core import (
-    sse_message_handler,
-    submit_code_context
-)
+from core import sse_message_handler, submit_code_context
 from core.create_ctrlflow_json import generate_code_graph_from_context
 from dummy_cfg import HARDCODED_CODE_GRAPH
 
 # Import from api package
-from api import (
-    get_control_flow_diagram,
-    execute_test_cases,
-    send_debugger_response
-)
+from api import get_control_flow_diagram, execute_test_cases, send_debugger_response
 
 # Initialize the MCP server (for stdio mode)
 mcp = FastMCP("Debug Context MCP Server")
@@ -44,18 +38,18 @@ mcp = FastMCP("Debug Context MCP Server")
 def submit_code_context_mcp(text: str) -> str:
     """
     Submit potential bug areas from codebase analysis. REQUIRES MULTIPLE CODE CHUNKS in sequence, each with ACTUAL CODE BLOCKS (5-10 lines), not English descriptions.
-    
+
     WORKFLOW: When a user reports a bug/error, scan the codebase to identify potential bug areas related to the reported issue. Send ALL candidate code chunks in ONE tool call.
-    
+
     Format: Repeat this pattern for EACH potential bug area found:
     1. [Code Chunk N] - Include ACTUAL CODE (5-10 lines) that could be causing the bug
     2. File: <filepath> - Full file path where this code exists
     3. Lines: <start>-<end> - Line number range using dash format (e.g., "10-25")
     4. [Explanation] - What specific bug this code chunk might cause AND indicate which related code chunks are problematic vs. which look good (use descriptive text)
     5. [Relationships] - Structural/logical/data flow relationships to other code chunks (calls, dependencies, data flow) WITHOUT error context. MUST include the actual code from related chunks when referencing them (show the code, file path, and line range)
-    
+
     Then continue with the next code chunk using the same pattern.
-    
+
     CRITICAL REQUIREMENTS:
     - Scan codebase when user reports a bug/error to find related code
     - Include MULTIPLE code chunks (not just one) - send ALL potential bug areas in one tool call
@@ -65,13 +59,13 @@ def submit_code_context_mcp(text: str) -> str:
     - Explanation must describe what bug might occur AND indicate which related chunks are problematic vs. good
     - Relationships should be structural/logical/data flow only (no error context)
     - Relationships MUST include actual code from related chunks when referencing them (show code, file path, and line range)
-    
+
     Example format (showing MULTIPLE chunks):
-    
+
     [Code Chunk 1]
     File: src/utils.py
     Lines: 15-24
-    
+
     def process_data(items):
         result = []
         for item in items:
@@ -79,34 +73,34 @@ def submit_code_context_mcp(text: str) -> str:
                 continue
             result.append(item * 2)
         return result
-    
+
     [Explanation]
     This function doesn't handle the case where items is None or empty, which could cause a TypeError when iterating. Code Chunk 2 (calculate_totals) is problematic because it calls this function without checking if data is None first. Code Chunk 3 (API handler) looks good as it validates input before calling calculate_totals.
-    
+
     [Relationships]
     This function is called by calculate_totals() function (see Code Chunk 2). The result is used by the API handler in Code Chunk 3. Receives data from the request processing pipeline.
-    
+
     Related code from Code Chunk 2:
     File: src/calculations.py
     Lines: 8-12
     def calculate_totals(data):
         processed = process_data(data)
         return sum(processed)
-    
+
     [Code Chunk 2]
     File: src/calculations.py
     Lines: 8-12
-    
+
     def calculate_totals(data):
         processed = process_data(data)
         return sum(processed)
-    
+
     [Explanation]
     This function calls process_data() without validating that data is None first, which will cause a TypeError. Code Chunk 1 (process_data) is problematic because it doesn't handle None input. Code Chunk 3 (API handler) looks good as it validates input.
-    
+
     [Relationships]
     Calls process_data() from Code Chunk 1. Called by API handler in Code Chunk 3. Part of the data processing pipeline.
-    
+
     Related code from Code Chunk 1:
     File: src/utils.py
     Lines: 15-24
@@ -134,12 +128,12 @@ def submit_code_context_mcp(text: str) -> str:
             result.get("nodes_count"),
             result.get("edges_count"),
         )
-        
+
         # TODO: Add workflow orchestration functionality here
         # - Trigger UI updates
         # - Notify other services
         # - Handle graph processing pipeline
-        
+
         # Return final result - tool will not return until graph generation is complete
         return json.dumps(result)
     except Exception as e:
@@ -157,7 +151,10 @@ def submit_code_context_mcp(text: str) -> str:
         })
 
 # Create FastAPI app
-app = FastAPI(title="Debug Context MCP Server", description="MCP server for code debugging context")
+app = FastAPI(
+    title="Debug Context MCP Server",
+    description="MCP server for code debugging context",
+)
 
 # Add CORS middleware
 app.add_middleware(
@@ -172,6 +169,7 @@ app.add_middleware(
 # REST API Routes
 # ============================================================================
 
+
 @app.get("/")
 async def root():
     """Root endpoint with server info."""
@@ -184,8 +182,8 @@ async def root():
             "execute_test_cases": "/execute_test_cases",
             "send_debugger_response": "/send_debugger_response",
             "sse": "/sse",
-            "sse_message": "/sse/message"
-        }
+            "sse_message": "/sse/message",
+        },
     }
 
 
@@ -204,7 +202,7 @@ async def health():
 @app.get("/get_control_flow_diagram")
 async def get_control_flow_diagram_endpoint():
     """Return the latest control-flow graph snapshot.
-    
+
     TODO: Replace this hardcoded payload with a fresh call to
     get_control_flow_diagram() once the dynamic generation pipeline is ready.
     """
@@ -244,6 +242,7 @@ async def send_debugger_response_endpoint(request: Request):
 # MCP Protocol - SSE transport
 # ============================================================================
 
+
 @app.get("/sse")
 async def sse_stream(request: Request):
     """Establish an SSE stream and return a connection_id."""
@@ -270,7 +269,9 @@ async def sse_stream(request: Request):
         "Access-Control-Allow-Headers": "*",
         "X-Connection-ID": connection_id,
     }
-    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)
+    return StreamingResponse(
+        event_generator(), media_type="text/event-stream", headers=headers
+    )
 
 
 @app.post("/sse")

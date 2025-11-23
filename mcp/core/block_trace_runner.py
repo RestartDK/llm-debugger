@@ -52,14 +52,24 @@ def _run_payload(payload: Dict[str, object]) -> Dict[str, object]:
     tests_code = payload.get("tests") or ""
     max_steps = payload.get("max_steps")
 
+    # Debug: log basic runner payload structure
+    print("[runner] sources:", sources, file=sys.stderr)
+    print("[runner] blocks_raw:", blocks_raw, file=sys.stderr)
+    print("[runner] tests_code (first 200 chars):", tests_code[:200], file=sys.stderr)
+
     blocks = [BasicBlock(**block_dict) for block_dict in blocks_raw]
     exit_lookup = build_exit_line_lookup(blocks)
-    file_filter = {entry["file_path"] for entry in sources}
+    print("[runner] exit_lookup keys:", list(exit_lookup.keys()), file=sys.stderr)
 
+    # NOTE: We intentionally do NOT restrict tracing to a specific file_filter here.
+    # Some environments may report absolute paths or slightly different filenames
+    # than the simple `file_path` strings we pass in the payload. If we filtered
+    # by `file_path` alone, we could accidentally drop all relevant frames and end
+    # up with an empty trace.
     tracer = make_line_tracer(
         exit_lookup,
         max_steps=max_steps or MAX_TRACE_STEPS,
-        file_filter=file_filter,
+        file_filter=None,
     )
     namespace: Dict[str, object] = {"__name__": "__main__"}
     _load_sources(sources, namespace)
@@ -84,6 +94,38 @@ def _run_payload(payload: Dict[str, object]) -> Dict[str, object]:
     trace_entries: List[TraceEntry] = getattr(
         tracer, "_ldb_trace_entries", []  # type: ignore[attr-defined]
     )
+    debug_meta: Dict[str, object] = getattr(
+        tracer, "_ldb_debug_meta", {}  # type: ignore[attr-defined]
+    )
+    print(
+        f"[runner] captured {len(trace_entries)} trace entries",
+        file=sys.stderr,
+    )
+    total_events = debug_meta.get("total_events")
+    unmatched_samples = debug_meta.get("unmatched_samples") or []
+    print(
+        f"[runner] total line events seen: {total_events}",
+        file=sys.stderr,
+    )
+    if unmatched_samples:
+        print(
+            "[runner] first unmatched (filename, line_no) samples:",
+            unmatched_samples,
+            file=sys.stderr,
+        )
+    if trace_entries:
+        first = trace_entries[0]
+        print(
+            "[runner] first trace entry:",
+            {
+                "block_id": first.block_id,
+                "file_path": first.file_path,
+                "line_no": first.line_no,
+                "locals": first.locals,
+            },
+            file=sys.stderr,
+        )
+
     result: Dict[str, object] = {
         "ok": error is None,
         "trace": [entry.to_dict() for entry in trace_entries],
