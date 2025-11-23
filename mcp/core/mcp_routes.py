@@ -317,9 +317,83 @@ async def process_mcp_request(method: str, params: dict, request_id: Optional[in
     
     # Handle tools/list
     elif method == "tools/list":
-        schema = get_tools_list_schema()
-        schema["id"] = request_id
-        return schema
+        # Try to use FastMCP's tool discovery if available
+        if mcp_instance and hasattr(mcp_instance, '_tools'):
+            import inspect
+            tools = []
+            for tool_name, tool_func in mcp_instance._tools.items():
+                # Get function signature and docstring
+                sig = inspect.signature(tool_func)
+                doc = inspect.getdoc(tool_func) or ""
+                
+                # Extract description from docstring
+                # Include full docstring up to a reasonable limit for MCP protocol
+                # This ensures all instructions and requirements are visible to the LLM
+                if doc:
+                    # Use the full docstring, but limit to 5000 chars to avoid overly long descriptions
+                    # Most MCP clients can handle this length, and it ensures complete instructions
+                    description = doc[:5000] + "..." if len(doc) > 5000 else doc
+                else:
+                    description = f"Tool: {tool_name}"
+                
+                # Build input schema from function parameters
+                properties = {}
+                required = []
+                for param_name, param in sig.parameters.items():
+                    # Skip 'self' and other special parameters
+                    if param_name == 'self':
+                        continue
+                    
+                    # Determine parameter type
+                    param_type = "string"  # default
+                    if param.annotation != inspect.Parameter.empty:
+                        if param.annotation == int:
+                            param_type = "integer"
+                        elif param.annotation == float:
+                            param_type = "number"
+                        elif param.annotation == bool:
+                            param_type = "boolean"
+                        elif param.annotation == list:
+                            param_type = "array"
+                    
+                    # Create parameter description
+                    # For 'text' parameter, provide a helpful description
+                    if param_name == "text":
+                        param_description = "Raw text payload containing code chunks with format: [Code Chunk N], File, Lines, [Explanation], [Relationships]. See tool description for full format requirements."
+                    else:
+                        param_description = f"Parameter: {param_name}"
+                    
+                    properties[param_name] = {
+                        "type": param_type,
+                        "description": param_description
+                    }
+                    
+                    # Add to required if no default value
+                    if param.default == inspect.Parameter.empty:
+                        required.append(param_name)
+                
+                tools.append({
+                    "name": tool_name,
+                    "description": description,
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": properties,
+                        "required": required if required else []
+                    }
+                })
+            
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {
+                    "tools": tools
+                }
+            }
+        else:
+            # Fall back to custom schema
+            schema = get_tools_list_schema()
+            schema["id"] = request_id
+            return schema
     
     # Handle initialized notification (no response needed)
     elif method == "notifications/initialized":
