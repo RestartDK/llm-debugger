@@ -43,7 +43,7 @@ class LlmDebugAgent:
             return
 
         model = GroqModel(model_name)
-        self._agent = PydanticAgent(model)
+        self._agent = PydanticAgent(model, retries=4)
 
     @property
     def agent(self) -> PydanticAgent:
