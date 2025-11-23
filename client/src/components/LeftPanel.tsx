@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/resizable';
 
 interface LeftPanelProps {
-  steps: RuntimeStep[];
+  steps: RuntimeStep[]; // Kept for backward compatibility but not used (RuntimeInspector replaced with FinalAnalysis)
   problems: Problem[];
   activeStepId: string | null;
   onStepSelect: (stepId: string) => void;
@@ -25,7 +25,7 @@ interface LeftPanelProps {
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = ({
-  steps,
+  steps: _steps, // Prefixed with underscore to indicate intentionally unused
   problems,
   activeStepId,
   onStepSelect,
