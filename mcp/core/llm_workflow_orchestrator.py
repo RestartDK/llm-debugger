@@ -297,14 +297,19 @@ def run_generated_test_through_tracer_and_analyze(
         tests=tests_code,
     )
     print(
-        "[orchestrator] runner payload summary:",
+        "[orchestrator] Building runner payload:",
         {
+            "sources_count": len(source_entries),
             "sources": [entry["file_path"] for entry in source_entries],
+            "blocks_count": len(block_entries),
             "blocks": [block.block_id for block in block_entries],
+            "tests_code_length": len(tests_code),
             "tests_code_preview": tests_code[:200],
         },
     )
+    print("[orchestrator] Invoking block tracing subprocess...", file=sys.stderr)
     trace_payload = run_with_block_tracing_subprocess(payload=payload)
+    print("[orchestrator] Block tracing subprocess returned", file=sys.stderr)
     trace_entries: List[Dict[str, Any]] = trace_payload.get("trace", []) or []
     error_info: Dict[str, Any] | None = trace_payload.get("error")
     source_loading_errors: List[Dict[str, Any]] = trace_payload.get("source_loading_errors", [])

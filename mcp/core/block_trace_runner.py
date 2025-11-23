@@ -279,17 +279,23 @@ def _run_payload(payload: Dict[str, object]) -> Dict[str, object]:
 
     def _execute():
         if tests_code:
+            print(f"[runner] Compiling test code ({len(tests_code)} chars)...", file=sys.stderr)
             compiled_tests = compile(
                 tests_code, payload.get("tests_filename", "debug_session/tests.py"), "exec"
             )
+            print("[runner] Executing compiled test code...", file=sys.stderr)
             exec(compiled_tests, namespace)
+            print("[runner] Test code execution finished", file=sys.stderr)
+        else:
+            print("[runner] WARNING: No test code provided to execute", file=sys.stderr)
 
+    print("[runner] Installing tracer before test execution...", file=sys.stderr)
     sys.settrace(tracer)
     error: Dict[str, object] | None = None
     test_execution_error: Dict[str, object] | None = None
     
     try:
-        print("[runner] Starting test execution...", file=sys.stderr)
+        print("[runner] Starting test execution with tracer active...", file=sys.stderr)
         _execute()
         print("[runner] Test execution completed successfully", file=sys.stderr)
     except AssertionError as exc:
@@ -332,6 +338,7 @@ def _run_payload(payload: Dict[str, object]) -> Dict[str, object]:
         print(f"[runner] ERROR during test execution - {type(exc).__name__}: {exc}", file=sys.stderr)
         print(f"[runner] Traceback:\n{tb}", file=sys.stderr)
     finally:
+        print("[runner] Uninstalling tracer...", file=sys.stderr)
         sys.settrace(None)
 
     trace_entries: List[TraceEntry] = getattr(
@@ -341,7 +348,7 @@ def _run_payload(payload: Dict[str, object]) -> Dict[str, object]:
         tracer, "_ldb_debug_meta", {}  # type: ignore[attr-defined]
     )
     print(
-        f"[runner] captured {len(trace_entries)} trace entries",
+        f"[runner] Tracer captured {len(trace_entries)} trace entries",
         file=sys.stderr,
     )
     total_events = debug_meta.get("total_events")

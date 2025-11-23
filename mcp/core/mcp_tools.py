@@ -83,7 +83,22 @@ def run_with_block_tracing_subprocess(
     """
 
     payload = payload or build_runner_payload(tests=DEMO_TESTS)
+    
+    # Log payload summary before subprocess execution
+    sources_count = len(payload.get("sources", []))
+    blocks_count = len(payload.get("blocks", []))
+    tests_preview = str(payload.get("tests", ""))[:200]
+    print(
+        f"[mcp_tools] Starting block tracing subprocess:",
+        f"sources={sources_count}, blocks={blocks_count}, "
+        f"tests_preview={tests_preview}...",
+        file=sys.stderr,
+    )
+    
     encoded = json.dumps(payload)
+    print(f"[mcp_tools] Subprocess payload size: {len(encoded)} bytes", file=sys.stderr)
+    
+    print(f"[mcp_tools] Executing subprocess: {sys.executable} -m {RUNNER_MODULE}", file=sys.stderr)
     process = subprocess.run(
         [sys.executable, "-m", RUNNER_MODULE],
         input=encoded,
@@ -93,11 +108,38 @@ def run_with_block_tracing_subprocess(
         check=False,
     )
 
+    print(
+        f"[mcp_tools] Subprocess completed: returncode={process.returncode}, "
+        f"stdout_len={len(process.stdout)}, stderr_len={len(process.stderr or '')}",
+        file=sys.stderr,
+    )
+
     stdout = process.stdout.strip()
-    response = json.loads(stdout or "{}")
+    try:
+        response = json.loads(stdout or "{}")
+    except json.JSONDecodeError as e:
+        print(
+            f"[mcp_tools] ERROR: Failed to parse subprocess JSON response: {e}",
+            file=sys.stderr,
+        )
+        print(f"[mcp_tools] Raw stdout: {stdout[:500]}", file=sys.stderr)
+        response = {"ok": False, "error": {"message": f"Failed to parse subprocess response: {e}"}}
+    
     response["returncode"] = process.returncode
     if process.stderr:
         response["stderr"] = process.stderr
+        print(f"[mcp_tools] Subprocess stderr captured ({len(process.stderr)} chars)", file=sys.stderr)
+    
+    # Log response summary
+    trace_count = len(response.get("trace", []))
+    has_error = response.get("error") is not None
+    has_source_errors = response.get("source_loading_errors", [])
+    print(
+        f"[mcp_tools] Subprocess response summary: trace_entries={trace_count}, "
+        f"has_error={has_error}, source_loading_errors={len(has_source_errors)}",
+        file=sys.stderr,
+    )
+    
     return response
 
 

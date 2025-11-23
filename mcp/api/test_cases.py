@@ -4,6 +4,7 @@ Test case execution.
 
 from __future__ import annotations
 
+import sys
 from typing import Any, TypedDict
 
 from core.agent import LlmDebugAgent
@@ -36,16 +37,26 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
             - sources: optional list of {"file_path", "code"} dicts.
             - blocks: optional list of {"block_id", "file_path", "start_line", "end_line"} dicts.
     """
+    print("[test_cases] ===== Starting test case execution workflow =====", file=sys.stderr)
+    print(
+        f"[test_cases] Received request data: task_description={'present' if data.get('task_description') else 'missing'}, "
+        f"sources_count={len(data.get('sources', []))}, "
+        f"blocks_count={len(data.get('blocks', []))}",
+        file=sys.stderr,
+    )
 
     task_description = data.get(
         "task_description", "Investigate generated test failure"
     )
+    print(f"[test_cases] Task description: {task_description[:100]}...", file=sys.stderr)
 
     sources = data.get("sources") or get_dummy_sources()
+    print(f"[test_cases] Using {len(sources)} source file(s)", file=sys.stderr)
     
     # Convert blocks from dict format to BasicBlock objects if provided
     blocks_raw = data.get("blocks")
     if blocks_raw:
+        print(f"[test_cases] Converting {len(blocks_raw)} blocks from dict format...", file=sys.stderr)
         blocks = [
             BasicBlock(
                 block_id=block_dict.get("block_id", ""),
@@ -58,18 +69,31 @@ def execute_test_cases(data: dict[str, Any]) -> DebuggerPayload:
         ]
         if not blocks:
             # If conversion failed, fall back to dummy blocks
+            print("[test_cases] WARNING: Block conversion failed, using dummy blocks", file=sys.stderr)
             blocks = get_dummy_blocks()
+        else:
+            print(f"[test_cases] Successfully converted {len(blocks)} blocks", file=sys.stderr)
     else:
+        print("[test_cases] No blocks provided, using dummy blocks", file=sys.stderr)
         blocks = get_dummy_blocks()
 
+    print("[test_cases] Initializing LlmDebugAgent...", file=sys.stderr)
     agent = LlmDebugAgent()
+    print("[test_cases] Calling run_generated_test_through_tracer_and_analyze...", file=sys.stderr)
     run_result = run_generated_test_through_tracer_and_analyze(
         agent=agent,
         task_description=task_description,
         sources=sources,
         blocks=blocks,
     )
+    print("[test_cases] Building debugger UI payload...", file=sys.stderr)
     payload: DebuggerPayload = build_debugger_ui_payload(run_result)  # type: ignore[assignment]
+    print(
+        f"[test_cases] Payload built: trace_entries={len(payload.get('trace', []))}, "
+        f"steps={len(payload.get('steps', []))}, problems={len(payload.get('problems', []))}",
+        file=sys.stderr,
+    )
+    print("[test_cases] ===== Test case execution workflow completed =====", file=sys.stderr)
 
     required_fields = (
         "suite",
