@@ -57,6 +57,19 @@ def submit_code_context_mcp(text: str) -> str:
     - Relationships should be structural/logical/data flow only (no error context)
     - Relationships MUST include actual code from related chunks when referencing them (show code, file path, and line range)
 
+    IMPORTANT: This tool kicks off a LONG-RUNNING workflow that:
+    1. Generates code nodes and edges using LLM calls (may take 30-60 seconds)
+    2. Saves the control flow graph to a JSON file
+    3. Makes it available via the GET endpoint for the frontend UI
+    4. The frontend will display the graph and allow users to trigger test execution
+
+    AFTER CALLING THIS TOOL:
+    - DO NOT immediately call the next tool (fetch_instructions_from_debugger)
+    - Return the frontend link to the user: https://llmdebugger.scottbot.party
+    - Tell the user to navigate to the UI to view the control flow diagram
+    - End this session and wait for user interaction
+    - The next tool call should only happen after the user has interacted with the UI and enough time has passed for the long-running workflow to complete
+
     Example format (showing MULTIPLE chunks):
 
     [Code Chunk 1]
@@ -126,13 +139,40 @@ def submit_code_context_mcp(text: str) -> str:
             result.get("edges_count"),
         )
 
-        # TODO: Add workflow orchestration functionality here
-        # - Trigger UI updates
-        # - Notify other services
-        # - Handle graph processing pipeline
+        # Format user-friendly response with frontend link
+        if result.get("status") == "completed":
+            nodes_count = result.get("nodes_count", 0)
+            edges_count = result.get("edges_count", 0)
+            filename = result.get("filename", "unknown")
+            
+            response_message = f"""✅ Control flow graph generation completed successfully!
 
-        # Return final result - tool will not return until graph generation is complete
-        return json.dumps(result)
+**Graph Summary:**
+- Nodes: {nodes_count}
+- Edges: {edges_count}
+- Saved to: {filename}
+
+🔗 **View the control flow diagram in the UI:**
+[Open Debugger UI](https://llmdebugger.scottbot.party)
+
+**Important:** This tool has kicked off a long-running workflow. The control flow graph is now being processed and will be available in the frontend UI. 
+
+**Next Steps:**
+1. Click the link above to navigate to the debugger UI
+2. The UI will display the control flow diagram with code nodes and their relationships
+3. You can interact with the diagram and trigger test execution from the UI
+4. Wait for user interaction before proceeding with any additional tool calls
+
+**Note:** Do not immediately call the next tool (fetch_instructions_from_debugger). End this session and wait for the user to interact with the UI. The next tool call should only happen after enough time has passed for the long-running workflow to complete and the user has had a chance to review the results."""
+        else:
+            # Error case
+            error_msg = result.get("message", "Unknown error occurred")
+            response_message = f"""❌ Error generating control flow graph: {error_msg}
+
+The graph generation failed. Please check the error message above and try again."""
+        
+        return response_message
+        
     except Exception as e:
         error_msg = f"Error generating graph: {str(e)}"
         logger.error(
@@ -142,7 +182,9 @@ def submit_code_context_mcp(text: str) -> str:
             exc_info=True,
         )
 
-        return json.dumps({"status": "error", "message": error_msg})
+        return f"""❌ Error generating control flow graph: {error_msg}
+
+An exception occurred during graph generation. Please check the error details and try again."""
 
 
 # Register second MCP tool
