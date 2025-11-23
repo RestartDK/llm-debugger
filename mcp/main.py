@@ -309,14 +309,18 @@ async def execute_test_cases_endpoint(request: Request):
 {task_description}
 
 [Lessons Learned]
-{final_analysis if final_analysis else "No final analysis available."}
+            # Only get relevant keys: analysis, attempts, final_analysis, and dump them as strings
+            analysis_str = str(result.get("analysis"))
+            attempts_str = str(result.get("attempts"))
+            final_analysis_str = str(result.get("final_analysis"))
 
-[Test Results Summary]
-Suite: {result.get('suite', {}).get('target_function', 'N/A')}
-Test Case: {result.get('test_case', {}).get('name', 'N/A')}
-Status: {'PASSED' if result.get('trace', {}).get('ok', False) else 'FAILED'}
-"""
-            
+            # Write to .txt instructions for editing, summarizing the test results and actions
+            instruction_content = "[Instructions for Edit]\n"
+            instruction_content += "Make changes according to these testing results:\n"
+            instruction_content += f"Analysis:\n{analysis_str}\n"
+            instruction_content += f"Attempts:\n{attempts_str}\n"
+            instruction_content += f"Final Analysis:\n{final_analysis_str if final_analysis_str else 'No final analysis available.'}\n"
+
             # Ensure instructions directory exists
             output_dir = "instructions"
             os.makedirs(output_dir, exist_ok=True)
@@ -325,20 +329,20 @@ Status: {'PASSED' if result.get('trace', {}).get('ok', False) else 'FAILED'}
             timestamp = datetime.now().strftime("%y-%m-%d_%H-%M")
             filename = f"{timestamp}.txt"
             filepath = os.path.join(output_dir, filename)
-            
+
             # Write instruction file
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(instruction_content)
-            
+
             logger.info(f"POST /execute_test_cases - Saved instructions to {filepath}")
+            return {
+                "analysis": analysis_str,
+                "attempts": attempts_str,
+                "final_analysis": final_analysis_str,
+            }
         except Exception as e:
             logger.error(f"POST /execute_test_cases - Failed to save instructions: {str(e)}")
-            # Continue even if saving fails
-        
-        return result
-    except Exception as e:
-        logger.error(f"POST /execute_test_cases - Error: {str(e)}")
-        return {"error": str(e)}
+            return {"error": str(e)}
 
 
 @app.post("/send_debugger_response")
