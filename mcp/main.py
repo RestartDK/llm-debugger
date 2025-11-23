@@ -6,7 +6,6 @@ Can be run as an MCP server (stdio) or as a FastAPI HTTP server with SSE support
 import logging
 import asyncio
 import json
-import threading
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastmcp import FastMCP, Context
@@ -34,39 +33,42 @@ from api import (
 mcp = FastMCP("Debug Context MCP Server")
 
 
-def create_progress_callback(ctx: Context):
-    """Create sync progress callback that calls async ctx.report_progress().
-    
-    This wrapper allows the synchronous graph generation function to report
-    progress via FastMCP's async ctx.report_progress() method.
+def create_progress_callback(ctx: Context, loop: asyncio.AbstractEventLoop):
     """
+    Create a sync progress callback that schedules ctx.report_progress() calls
+    back onto the main event loop. This lets us run the heavy graph generation
+    inside asyncio.to_thread() while still streaming progress to Cursor.
+    """
+
     def progress_callback(stage: str, message: str, progress: float):
-        """Sync callback that calls async ctx.report_progress()."""
-        # Convert progress (0.0-1.0) to percentage (0-100)
-        progress_percent = int(progress * 100)
-        
-        # Get or create event loop
+        """Sync callback invoked from the worker thread."""
+        progress_percent = max(0, min(100, int(progress * 100)))
+        coroutine = ctx.report_progress(progress=progress_percent, total=100)
+
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        # Call async method from sync context
-        if loop.is_running():
-            # If loop is running, schedule coroutine
-            asyncio.create_task(ctx.report_progress(progress=progress_percent, total=100))
-        else:
-            # If no loop running, run in new task
-            try:
-                loop.run_until_complete(ctx.report_progress(progress=progress_percent, total=100))
-            except RuntimeError:
-                # If we can't run, try creating a new event loop
-                asyncio.run(ctx.report_progress(progress=progress_percent, total=100))
-        
-        # Log progress
-        logger.info(f"Progress [{stage}]: {message} ({progress_percent}%)")
-    
+            future = asyncio.run_coroutine_threadsafe(coroutine, loop)
+
+            def _log_future_result(fut: asyncio.Future) -> None:
+                exc = fut.exception()
+                if exc:
+                    logger.warning(
+                        "Progress update failed for stage '%s': %s", stage, exc
+                    )
+
+            future.add_done_callback(_log_future_result)
+        except RuntimeError as exc:
+            logger.warning(
+                "Unable to schedule progress update for stage '%s': %s", stage, exc
+            )
+            return
+
+        logger.info(
+            "Progress update queued [%s]: %s (%d%%)",
+            stage,
+            message,
+            progress_percent,
+        )
+
     return progress_callback
 
 
@@ -149,21 +151,29 @@ async def submit_code_context_mcp(text: str, ctx: Context) -> str:
             result.append(item * 2)
         return result
     """
-    # Create progress callback using FastMCP Context
-    progress_callback = create_progress_callback(ctx)
+    loop = asyncio.get_running_loop()
+    progress_callback = create_progress_callback(ctx, loop)
+    context_size = len(text or "")
+    logger.info(
+        "Graph generation request received (chars=%d). Offloading to worker thread.",
+        context_size,
+    )
     
-    # Generate graph from context - this will block until complete
-    # Progress updates will be sent via FastMCP's progress mechanism
+    # Generate graph from context inside a background thread so progress can stream
     try:
-        logger.info("Starting graph generation from MCP tool call")
-        
-        # Call sync graph generation function
-        result = generate_code_graph_from_context(
+        result = await asyncio.to_thread(
+            generate_code_graph_from_context,
             text,
-            progress_callback=progress_callback
+            progress_callback=progress_callback,
         )
         
-        logger.info(f"Graph generation complete: {result.get('status')}")
+        logger.info(
+            "Graph generation worker complete: status=%s filename=%s nodes=%s edges=%s",
+            result.get("status"),
+            result.get("filename"),
+            result.get("nodes_count"),
+            result.get("edges_count"),
+        )
         
         # TODO: Add workflow orchestration functionality here
         # - Trigger UI updates
@@ -174,7 +184,12 @@ async def submit_code_context_mcp(text: str, ctx: Context) -> str:
         return json.dumps(result)
     except Exception as e:
         error_msg = f"Error generating graph: {str(e)}"
-        logger.error(error_msg)
+        logger.error(
+            "Graph generation worker failed (chars=%d): %s",
+            context_size,
+            error_msg,
+            exc_info=True,
+        )
         
         # Report error progress
         await ctx.report_progress(progress=0, total=100)

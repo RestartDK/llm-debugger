@@ -137,29 +137,60 @@ def create_code_nodes_with_retry(
     Raises:
         Exception: If all retry attempts fail
     """
+    logger.info(
+        "Starting create_code_nodes_with_retry (model=%s, max_retries=%d)",
+        model,
+        max_retries,
+    )
     delay = initial_delay
     last_exception = None
+    start_time = time.time()
     
     for attempt in range(max_retries):
+        attempt_start = time.time()
         try:
             if progress_callback:
                 progress_callback("creating_nodes", f"Creating code nodes (attempt {attempt + 1}/{max_retries})...", 0.1 + (attempt * 0.1))
             logger.info(f"Attempting to create code nodes with model {model} (attempt {attempt + 1}/{max_retries})")
             result = create_code_nodes(context_dump, model=model)
-            logger.info(f"Successfully created {len(result.nodes)} code nodes")
+            attempt_elapsed = time.time() - attempt_start
+            logger.info(
+                "create_code_nodes attempt %d succeeded in %.2fs with %d nodes",
+                attempt + 1,
+                attempt_elapsed,
+                len(result.nodes),
+            )
+            total_elapsed = time.time() - start_time
+            logger.info(
+                "create_code_nodes_with_retry completed in %.2fs with %d nodes",
+                total_elapsed,
+                len(result.nodes),
+            )
             if progress_callback:
                 progress_callback("creating_nodes", f"Successfully created {len(result.nodes)} code nodes", 0.4)
             return result
         except Exception as e:
             last_exception = e
-            logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+            attempt_elapsed = time.time() - attempt_start
+            logger.warning(
+                "create_code_nodes attempt %d failed after %.2fs: %s",
+                attempt + 1,
+                attempt_elapsed,
+                str(e),
+            )
             
             if attempt < max_retries - 1:
                 logger.info(f"Retrying in {delay} seconds...")
                 time.sleep(delay)
                 delay *= backoff_factor
             else:
-                logger.error(f"All {max_retries} attempts failed. Last error: {str(e)}")
+                total_elapsed = time.time() - start_time
+                logger.error(
+                    "All %d attempts failed after %.2fs. Last error: %s",
+                    max_retries,
+                    total_elapsed,
+                    str(e),
+                )
                 raise
     
     # This should never be reached, but included for type safety
@@ -387,26 +418,57 @@ def create_edges_from_nodes_with_retry(
     Raises:
         Exception: If all retry attempts fail
     """
-    logger.info(f"Starting create_edges_from_nodes_with_retry (max_retries={max_retries}, model={model}, nodes={len(code_nodes.nodes)})")
+    logger.info(
+        "Starting create_edges_from_nodes_with_retry (model=%s, nodes=%d, max_retries=%d)",
+        model,
+        len(code_nodes.nodes),
+        max_retries,
+    )
     delay = initial_delay
     last_exception = None
+    start_time = time.time()
     
     for attempt in range(max_retries):
+        attempt_start = time.time()
         try:
             logger.info(f"Attempting to create edges with model {model} (attempt {attempt + 1}/{max_retries})")
             result = create_edges_from_nodes(code_nodes, model=model, progress_callback=progress_callback)
-            logger.info(f"Successfully created {len(result)} edges")
+            attempt_elapsed = time.time() - attempt_start
+            logger.info(
+                "create_edges_from_nodes attempt %d succeeded in %.2fs with %d edges",
+                attempt + 1,
+                attempt_elapsed,
+                len(result),
+            )
+            total_elapsed = time.time() - start_time
+            logger.info(
+                "create_edges_from_nodes_with_retry completed in %.2fs with %d edges",
+                total_elapsed,
+                len(result),
+            )
             return result
         except Exception as e:
             last_exception = e
-            logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+            attempt_elapsed = time.time() - attempt_start
+            logger.warning(
+                "create_edges_from_nodes attempt %d failed after %.2fs: %s",
+                attempt + 1,
+                attempt_elapsed,
+                str(e),
+            )
             
             if attempt < max_retries - 1:
                 logger.info(f"Retrying in {delay} seconds...")
                 time.sleep(delay)
                 delay *= backoff_factor
             else:
-                logger.error(f"All {max_retries} attempts failed. Last error: {str(e)}")
+                total_elapsed = time.time() - start_time
+                logger.error(
+                    "All %d attempts to create edges failed after %.2fs. Last error: %s",
+                    max_retries,
+                    total_elapsed,
+                    str(e),
+                )
                 raise
     
     # This should never be reached, but included for type safety
@@ -432,6 +494,7 @@ def generate_code_graph_from_context(
         dict with keys: "status", "filename", "nodes_count", "edges_count", "message"
     """
     logger.info("Starting generate_code_graph_from_context")
+    start_time = time.time()
     try:
         # Ensure output directory exists
         os.makedirs(output_dir, exist_ok=True)
@@ -479,13 +542,16 @@ def generate_code_graph_from_context(
             progress_callback("saving", f"Saving graph to {filename}...", 0.95)
         
         # Save to JSON file
+        logger.info(f"Saving graph output to {filepath}")
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(combined_output, f, indent=4, ensure_ascii=False)
+        logger.info(f"Graph output saved to {filepath}")
         
         # Complete
         if progress_callback:
             progress_callback("complete", "Graph generation complete. Check the UI.", 1.0)
         
+        total_elapsed = time.time() - start_time
         result_dict = {
             "status": "completed",
             "message": "Graph generation complete. Check the UI.",
@@ -493,12 +559,22 @@ def generate_code_graph_from_context(
             "nodes_count": len(result.nodes),
             "edges_count": len(edges)
         }
-        logger.info(f"Successfully completed generate_code_graph_from_context: {result_dict}")
+        logger.info(
+            "Successfully completed generate_code_graph_from_context in %.2fs: %s",
+            total_elapsed,
+            result_dict,
+        )
         return result_dict
         
     except Exception as e:
         error_msg = f"Error generating graph: {str(e)}"
-        logger.error(f"Failed generate_code_graph_from_context: {error_msg}", exc_info=True)
+        total_elapsed = time.time() - start_time
+        logger.error(
+            "Failed generate_code_graph_from_context after %.2fs: %s",
+            total_elapsed,
+            error_msg,
+            exc_info=True,
+        )
         if progress_callback:
             progress_callback("error", error_msg, 0.0)
         return {
