@@ -7,7 +7,6 @@ import asyncio
 import json
 import logging
 import uuid
-from typing import Dict
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,9 +16,6 @@ from fastmcp import FastMCP, Context
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Track active SSE connections (connection_id -> asyncio.Queue)
-_active_connections: Dict[str, asyncio.Queue] = {}
 
 # Hardcoded control-flow graph response (TODO: revert to dynamic generation)
 # Payload is stored in dummy_cfg.HARDCODED_CODE_GRAPH so deployments do not rely on copying a JSON file.
@@ -41,45 +37,6 @@ from api import (
 
 # Initialize the MCP server (for stdio mode)
 mcp = FastMCP("Debug Context MCP Server")
-
-
-def create_progress_callback(ctx: Context, loop: asyncio.AbstractEventLoop):
-    """
-    Create a sync progress callback that schedules ctx.report_progress() calls
-    back onto the main event loop. This lets us run the heavy graph generation
-    inside asyncio.to_thread() while still streaming progress to Cursor.
-    """
-
-    def progress_callback(stage: str, message: str, progress: float):
-        """Sync callback invoked from the worker thread."""
-        progress_percent = max(0, min(100, int(progress * 100)))
-        coroutine = ctx.report_progress(progress=progress_percent, total=100)
-
-        try:
-            future = asyncio.run_coroutine_threadsafe(coroutine, loop)
-
-            def _log_future_result(fut: asyncio.Future) -> None:
-                exc = fut.exception()
-                if exc:
-                    logger.warning(
-                        "Progress update failed for stage '%s': %s", stage, exc
-                    )
-
-            future.add_done_callback(_log_future_result)
-        except RuntimeError as exc:
-            logger.warning(
-                "Unable to schedule progress update for stage '%s': %s", stage, exc
-            )
-            return
-
-        logger.info(
-            "Progress update queued [%s]: %s (%d%%)",
-            stage,
-            message,
-            progress_percent,
-        )
-
-    return progress_callback
 
 
 # Register MCP tool
@@ -161,24 +118,18 @@ async def submit_code_context_mcp(text: str, ctx: Context) -> str:
             result.append(item * 2)
         return result
     """
-    loop = asyncio.get_running_loop()
-    progress_callback = create_progress_callback(ctx, loop)
     context_size = len(text or "")
     logger.info(
-        "Graph generation request received (chars=%d). Offloading to worker thread.",
+        "Graph generation request received (chars=%d). Running synchronously.",
         context_size,
     )
+    logger.debug("submit_code_context_mcp context object: %s", ctx)
     
-    # Generate graph from context inside a background thread so progress can stream
     try:
-        result = await asyncio.to_thread(
-            generate_code_graph_from_context,
-            text,
-            progress_callback=progress_callback,
-        )
+        result = generate_code_graph_from_context(text)
         
         logger.info(
-            "Graph generation worker complete: status=%s filename=%s nodes=%s edges=%s",
+            "Graph generation complete: status=%s filename=%s nodes=%s edges=%s",
             result.get("status"),
             result.get("filename"),
             result.get("nodes_count"),
@@ -200,10 +151,7 @@ async def submit_code_context_mcp(text: str, ctx: Context) -> str:
             error_msg,
             exc_info=True,
         )
-        
-        # Report error progress
-        await ctx.report_progress(progress=0, total=100)
-        
+
         return json.dumps({
             "status": "error",
             "message": error_msg
@@ -302,9 +250,6 @@ async def sse_stream(request: Request):
     """Establish an SSE stream and return a connection_id."""
     connection_id = uuid.uuid4().hex
     logger.info("New SSE connection: %s", connection_id)
-    queue: asyncio.Queue = asyncio.Queue()
-    _active_connections[connection_id] = queue
-
     async def event_generator():
         # Initial event so clients learn the connection_id
         yield (
@@ -313,13 +258,9 @@ async def sse_stream(request: Request):
         )
         try:
             while True:
-                message = await queue.get()
-                yield f"data: {json.dumps(message)}\n\n"
+                await asyncio.sleep(15)
         except asyncio.CancelledError:
             logger.info("SSE connection %s cancelled by client", connection_id)
-        finally:
-            _active_connections.pop(connection_id, None)
-            logger.info("SSE connection %s cleaned up", connection_id)
 
     headers = {
         "Cache-Control": "no-cache",
@@ -340,9 +281,11 @@ async def sse_post(request: Request):
     return await sse_message(request)
 
 
-def _extract_connection_id(request: Request, payload: dict) -> str | None:
-    """Extract connection_id from multiple possible locations."""
-    return (
+@app.post("/sse/message")
+async def sse_message(request: Request):
+    """Handle MCP JSON-RPC messages sent over HTTP and echo them to the SSE stream."""
+    payload = await request.json()
+    connection_id = (
         payload.get("connection_id")
         or payload.get("params", {}).get("connection_id")
         or request.headers.get("x-connection-id")
@@ -350,36 +293,10 @@ def _extract_connection_id(request: Request, payload: dict) -> str | None:
         or request.query_params.get("connection_id")
         or request.cookies.get("mcp_connection_id")
     )
-
-
-@app.post("/sse/message")
-async def sse_message(request: Request):
-    """Handle MCP JSON-RPC messages sent over HTTP and echo them to the SSE stream."""
-    payload = await request.json()
-    connection_id = _extract_connection_id(request, payload)
-
-    if not connection_id and _active_connections:
-        # Fall back to the first active connection (single-client scenario)
-        connection_id = next(iter(_active_connections))
-        logger.warning(
-            "No connection_id supplied; using first active connection %s. "
-            "Consider ensuring clients include X-Connection-ID.",
-            connection_id,
-        )
-    elif not connection_id:
-        logger.warning(
-            "SSE message received without connection_id and no active connections yet: %s",
-            payload,
-        )
-
-    queue = _active_connections.get(connection_id) if connection_id else None
-    if connection_id and queue is None:
-        logger.warning("SSE message for unknown connection_id: %s", connection_id)
+    if not connection_id:
+        logger.warning("SSE message received without connection_id: %s", payload)
 
     result = await sse_message_handler(request, mcp_instance=mcp)
-
-    if queue is not None:
-        await queue.put(result)
 
     return JSONResponse(result)
 
