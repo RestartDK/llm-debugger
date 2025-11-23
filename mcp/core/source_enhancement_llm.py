@@ -1,0 +1,153 @@
+from __future__ import annotations
+
+from textwrap import dedent
+from typing import Dict, List, Optional, Sequence
+
+from pydantic import BaseModel, Field
+from pydantic_ai import Agent
+
+
+class EnhancedSource(BaseModel):
+    """
+    Structured representation of an enhanced source code file.
+    """
+
+    file_path: str = Field(..., description="Original file path")
+    enhanced_code: str = Field(..., description="Self-contained executable code with stubs/imports")
+    added_imports: List[str] = Field(
+        default_factory=list,
+        description="List of imports or stubs that were added",
+    )
+    reasoning: str = Field(
+        ..., description="Brief explanation of what was enhanced and why"
+    )
+
+
+def build_enhancement_prompt(
+    code_snippet: str,
+    file_path: str,
+    error_context: Optional[List[Dict[str, str]]] = None,
+) -> str:
+    """
+    Build a prompt that asks the LLM to enhance code snippets to be self-contained and executable.
+    """
+
+    error_section = ""
+    if error_context:
+        error_details = []
+        for err in error_context:
+            error_type = err.get("error_type", "unknown")
+            error_msg = err.get("message", "Unknown error")
+            file_path_err = err.get("file_path", file_path)
+            traceback = err.get("traceback", "")
+            
+            error_details.append(
+                f"Error Type: {error_type}\n"
+                f"Error Message: {error_msg}\n"
+                f"File: {file_path_err}\n"
+                f"Traceback:\n{traceback[:500] if traceback else 'N/A'}"
+            )
+        
+        error_section = f"""
+Previous Execution Errors:
+{chr(10).join(error_details)}
+
+The code failed to execute with the above errors. Please fix these specific issues.
+"""
+
+    prompt = f"""
+You are a senior Python engineer tasked with making incomplete code snippets self-contained and executable.
+
+Code snippet to enhance:
+```python
+{code_snippet.strip()}
+```
+
+File path: {file_path}
+{error_section}
+
+Your task:
+1. Analyze the code to identify missing dependencies (imports, classes, enums, functions, constants, etc.)
+2. Infer reasonable implementations based on how these dependencies are used in the code
+3. Create minimal stubs or implementations that allow the code to execute
+4. Preserve the original code structure and logic exactly as-is
+5. Add only the minimal necessary code to make it executable
+
+Guidelines:
+- If you see `Language.ROUND` or similar enum-like usage, create an Enum class with appropriate values
+- If you see `@app.post` or similar decorators, these are already stubbed (FastAPI/Flask stubs exist)
+- If a class/function is referenced but not defined, create a minimal stub that matches the usage pattern
+- For imports, add standard library imports or create stub modules as needed
+- For module-level constants, infer reasonable values based on usage
+- Do NOT modify the original code logic - only add missing dependencies
+- Keep stubs minimal - they just need to allow execution, not be fully functional
+
+Return the enhanced code that:
+- Is self-contained and executable
+- Includes all necessary imports/stubs at the top
+- Preserves the original code exactly (only additions, no modifications)
+- Can be executed without NameError, ImportError, or similar dependency errors
+
+Return data that strictly matches the JSON schema:
+{{
+  "file_path": "{file_path}",
+  "enhanced_code": "complete executable Python code with imports/stubs",
+  "added_imports": ["list of what was added"],
+  "reasoning": "brief explanation of what was enhanced"
+}}
+"""
+    return dedent(prompt).strip()
+
+
+def enhance_source_code(
+    *,
+    agent: Agent,
+    sources: Sequence[Dict[str, str]],
+    error_context: Optional[List[Dict[str, str]]] = None,
+) -> List[EnhancedSource]:
+    """
+    Enhance source code snippets to be self-contained and executable.
+    
+    Args:
+        agent: pydantic-ai Agent for LLM calls
+        sources: List of source dicts with "file_path" and "code" keys
+        error_context: Optional list of error dicts from previous execution attempts
+        
+    Returns:
+        List of EnhancedSource objects with enhanced code
+    """
+    enhanced_sources = []
+    
+    for source in sources:
+        file_path = source.get("file_path", "unknown.py")
+        code = source.get("code", "")
+        
+        # Filter error context to this specific file if available
+        file_errors = None
+        if error_context:
+            file_errors = [
+                err for err in error_context 
+                if err.get("file_path") == file_path
+            ]
+            # If no file-specific errors, use all errors as context
+            if not file_errors:
+                file_errors = error_context
+        
+        prompt = build_enhancement_prompt(code, file_path, file_errors)
+        
+        try:
+            run_result = agent.run_sync(prompt, output_type=EnhancedSource)
+            enhanced_sources.append(run_result.output)
+        except Exception as e:
+            # If enhancement fails, return original code with error note
+            enhanced_sources.append(
+                EnhancedSource(
+                    file_path=file_path,
+                    enhanced_code=code,  # Fallback to original
+                    added_imports=[],
+                    reasoning=f"Enhancement failed: {str(e)}. Using original code.",
+                )
+            )
+    
+    return enhanced_sources
+

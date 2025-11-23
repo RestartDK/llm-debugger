@@ -15,6 +15,7 @@ from .debug_analysis_llm import (
 from .debug_types import BasicBlock
 from .dummy_cfg import get_dummy_blocks, get_dummy_sources
 from .mcp_tools import build_runner_payload, run_with_block_tracing_subprocess
+from .source_enhancement_llm import EnhancedSource
 from .test_generation_llm import GeneratedTestCase, GeneratedTestSuite
 from textwrap import dedent as _dedent
 import asyncio
@@ -290,30 +291,130 @@ def run_generated_test_through_tracer_and_analyze(
     test_case = suite.tests[selected_index]
     tests_code = render_generated_test_case_to_python(test_case, suite)
 
+    # Enhance source code to be self-contained and executable
+    print("[orchestrator] Enhancing source code for execution...", file=sys.stderr)
+    enhanced_sources_list = agent.enhance_sources_for_execution(sources=source_entries)
+    
+    # Convert EnhancedSource objects back to Dict format for payload
+    enhanced_source_entries = []
+    for enhanced in enhanced_sources_list:
+        print(
+            f"[orchestrator] Enhanced {enhanced.file_path}: "
+            f"added {len(enhanced.added_imports)} imports/stubs, "
+            f"reasoning: {enhanced.reasoning[:100]}...",
+            file=sys.stderr,
+        )
+        enhanced_source_entries.append({
+            "file_path": enhanced.file_path,
+            "code": enhanced.enhanced_code,
+        })
+    
     block_entries = list(blocks) if blocks is not None else get_dummy_blocks()
-    payload = build_runner_payload(
-        sources=source_entries,
-        blocks=block_entries,
-        tests=tests_code,
-    )
-    print(
-        "[orchestrator] Building runner payload:",
-        {
-            "sources_count": len(source_entries),
-            "sources": [entry["file_path"] for entry in source_entries],
-            "blocks_count": len(block_entries),
-            "blocks": [block.block_id for block in block_entries],
-            "tests_code_length": len(tests_code),
-            "tests_code_preview": tests_code[:200],
-        },
-    )
-    print("[orchestrator] Invoking block tracing subprocess...", file=sys.stderr)
-    trace_payload = run_with_block_tracing_subprocess(payload=payload)
-    print("[orchestrator] Block tracing subprocess returned", file=sys.stderr)
+    
+    # Helper function to execute with enhanced sources
+    def _execute_with_sources(sources_to_use: List[Dict[str, str]], attempt_num: int = 1) -> Dict[str, Any]:
+        print(
+            f"[orchestrator] Execution attempt {attempt_num} with {len(sources_to_use)} source file(s)",
+            file=sys.stderr,
+        )
+        payload = build_runner_payload(
+            sources=sources_to_use,
+            blocks=block_entries,
+            tests=tests_code,
+        )
+        print(
+            f"[orchestrator] Building runner payload (attempt {attempt_num}):",
+            {
+                "sources_count": len(sources_to_use),
+                "sources": [entry["file_path"] for entry in sources_to_use],
+                "blocks_count": len(block_entries),
+                "blocks": [block.block_id for block in block_entries],
+                "tests_code_length": len(tests_code),
+                "tests_code_preview": tests_code[:200],
+            },
+        )
+        print(f"[orchestrator] Invoking block tracing subprocess (attempt {attempt_num})...", file=sys.stderr)
+        trace_payload = run_with_block_tracing_subprocess(payload=payload)
+        print(f"[orchestrator] Block tracing subprocess returned (attempt {attempt_num})", file=sys.stderr)
+        return trace_payload
+    
+    # Initial execution attempt
+    trace_payload = _execute_with_sources(enhanced_source_entries, attempt_num=1)
     trace_entries: List[Dict[str, Any]] = trace_payload.get("trace", []) or []
     error_info: Dict[str, Any] | None = trace_payload.get("error")
     source_loading_errors: List[Dict[str, Any]] = trace_payload.get("source_loading_errors", [])
     stderr_text = trace_payload.get("stderr")
+    
+    # Iterative retry logic: if source loading failed, enhance again with error context
+    max_retries = 2
+    retry_count = 0
+    current_sources = enhanced_source_entries
+    
+    while source_loading_errors and retry_count < max_retries:
+        retry_count += 1
+        print(
+            f"[orchestrator] Source loading failed. Retry attempt {retry_count}/{max_retries} "
+            f"with error context enhancement...",
+            file=sys.stderr,
+        )
+        
+        # Enhance again with error context
+        print(
+            f"[orchestrator] Re-enhancing sources with {len(source_loading_errors)} error(s) as context...",
+            file=sys.stderr,
+        )
+        re_enhanced_sources_list = agent.enhance_sources_for_execution(
+            sources=source_entries,  # Use original sources, not previously enhanced
+            error_context=source_loading_errors,
+        )
+        
+        # Convert back to Dict format
+        current_sources = []
+        for enhanced in re_enhanced_sources_list:
+            print(
+                f"[orchestrator] Re-enhanced {enhanced.file_path}: "
+                f"added {len(enhanced.added_imports)} imports/stubs, "
+                f"reasoning: {enhanced.reasoning[:100]}...",
+                file=sys.stderr,
+            )
+            current_sources.append({
+                "file_path": enhanced.file_path,
+                "code": enhanced.enhanced_code,
+            })
+        
+        # Retry execution
+        trace_payload = _execute_with_sources(current_sources, attempt_num=retry_count + 1)
+        
+        # Check if retry succeeded
+        trace_entries = trace_payload.get("trace", []) or []
+        error_info = trace_payload.get("error")
+        source_loading_errors = trace_payload.get("source_loading_errors", [])
+        stderr_text = trace_payload.get("stderr")
+        
+        if not source_loading_errors:
+            print(
+                f"[orchestrator] Retry {retry_count} succeeded - sources loaded successfully!",
+                file=sys.stderr,
+            )
+            break
+        else:
+            print(
+                f"[orchestrator] Retry {retry_count} still has {len(source_loading_errors)} source loading error(s)",
+                file=sys.stderr,
+            )
+    
+    if source_loading_errors:
+        print(
+            f"[orchestrator] WARNING: After {retry_count} retry attempt(s), "
+            f"{len(source_loading_errors)} source file(s) still failed to load:",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"[orchestrator] All sources loaded successfully "
+            f"{f'after {retry_count} retry attempt(s)' if retry_count > 0 else ''}",
+            file=sys.stderr,
+        )
     
     print(
         f"[orchestrator] trace_entries count: {len(trace_entries)}, "
@@ -322,7 +423,6 @@ def run_generated_test_through_tracer_and_analyze(
     
     # Log source loading errors if any
     if source_loading_errors:
-        print(f"[orchestrator] WARNING: {len(source_loading_errors)} source file(s) failed to load:", file=sys.stderr)
         for err in source_loading_errors:
             error_type = err.get("error_type", "unknown")
             file_path = err.get("file_path", "unknown")
@@ -341,7 +441,8 @@ def run_generated_test_through_tracer_and_analyze(
     if stderr_text:
         print("[orchestrator] runner stderr:\n", stderr_text)
 
-    block_lookup = _build_block_info_lookup(block_entries, source_entries)
+    # Use current_sources (which may have been re-enhanced) for block lookup
+    block_lookup = _build_block_info_lookup(block_entries, current_sources)
     snapshot_pairs = _build_runtime_snapshots_from_trace(trace_entries)
 
     block_infos: List[BlockInfo] = []

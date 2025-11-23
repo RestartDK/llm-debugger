@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 
-from typing import Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 from pydantic_ai import Agent as PydanticAgent
 from pydantic_ai.models.google import GoogleModel
@@ -13,6 +13,10 @@ from .debug_analysis_llm import (
     FailedTest,
     RuntimeStateSnapshot,
     analyze_failed_test,
+)
+from .source_enhancement_llm import (
+    EnhancedSource,
+    enhance_source_code,
 )
 from .test_generation_llm import GeneratedTestSuite, generate_tests_for_code
 
@@ -89,4 +93,26 @@ class LlmDebugAgent:
             blocks=blocks,
             runtime_states=runtime_states,
             failed_test=failed_test,
+        )
+
+    def enhance_sources_for_execution(
+        self,
+        *,
+        sources: Sequence[Dict[str, str]],
+        error_context: Optional[List[Dict[str, str]]] = None,
+    ) -> List[EnhancedSource]:
+        """
+        Enhance source code snippets to be self-contained and executable.
+        
+        Args:
+            sources: List of source dicts with "file_path" and "code" keys
+            error_context: Optional list of error dicts from previous execution attempts
+            
+        Returns:
+            List of EnhancedSource objects with enhanced code
+        """
+        return enhance_source_code(
+            agent=self._agent,
+            sources=sources,
+            error_context=error_context,
         )
