@@ -271,3 +271,11 @@ def compute_average(values):
 
 
 """
+
+
+def get_cfg_parser():
+    return """
+
+For a given prompt, parse the code blocks in it into 
+
+"""
