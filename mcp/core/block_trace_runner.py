@@ -245,6 +245,11 @@ def _run_payload(payload: Dict[str, object]) -> Dict[str, object]:
     print("  - Blueprint: Flask Blueprint stub", file=sys.stderr)
     
     # Also add common imports that might be missing
+    # sys is always available (it's imported at module level)
+    namespace["sys"] = sys
+    stubs_provided.append("sys (stdlib)")
+    print("  - sys: Standard library module (always available)", file=sys.stderr)
+    
     try:
         import os
         namespace["os"] = os
