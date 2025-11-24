@@ -1,10 +1,5 @@
 # BugPoint
 
-<video controls width="100%">
-  <source src="attachments/bugpoint-demo.mp4" type="video/mp4">
-  Your browser does not support the video tag. You can
-  <a href="attachments/bugpoint-demo.mp4">download the demo here</a>.
-</video>
 
 ## Problem Statement
 
