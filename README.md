@@ -2,7 +2,7 @@
 
 [Demo](https://github.com/user-attachments/assets/d36b94ed-c0fb-4f3c-9e40-6003bcda3492)
 
-## Problem Statement
+## Problem 
 
 Modern AI coding agents are powerful at pattern matching and code generation, but they are effectively blind to how code actually executes. Today they:
 
