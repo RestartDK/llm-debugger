@@ -960,7 +960,12 @@ CRITICAL OUTPUT FORMAT REQUIREMENTS:
 - Keep it concise but comprehensive.
 """
     
-    url = "https://api.groq.com/openai/v1/chat/completions"
+    groq_base_url = os.getenv("GROQ_API_BASE_URL")
+    if not groq_base_url:
+        raise RuntimeError(
+            "GROQ_API_BASE_URL must be set to call the Groq chat completions API"
+        )
+    url = f"{groq_base_url.rstrip('/')}/openai/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",

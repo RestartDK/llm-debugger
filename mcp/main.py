@@ -67,7 +67,7 @@ def submit_code_context_mcp(text: str) -> str:
 
     AFTER CALLING THIS TOOL:
     - DO NOT immediately call the next tool (fetch_instructions_from_debugger)
-    - Return the frontend link to the user: https://llmdebugger.scottbot.party
+    - Return the frontend link to the user using the BUGPOINT_UI_URL environment variable
     - Tell the user to navigate to the UI to view the control flow diagram
     - End this session and wait for user interaction
     - The next tool call should only happen after the user has interacted with the UI and enough time has passed for the long-running workflow to complete
@@ -147,6 +147,8 @@ def submit_code_context_mcp(text: str) -> str:
             edges_count = result.get("edges_count", 0)
             filename = result.get("filename", "unknown")
             
+            frontend_base_url = os.getenv("BUGPOINT_UI_URL") or ""
+
             response_message = f"""✅ Control flow graph generation completed successfully!
 
 **Graph Summary:**
@@ -155,7 +157,7 @@ def submit_code_context_mcp(text: str) -> str:
 - Saved to: {filename}
 
 🔗 **View the control flow diagram in the UI:**
-[Open Debugger UI](https://llmdebugger.scottbot.party)
+{"[Open Debugger UI](" + frontend_base_url + ")" if frontend_base_url else "Open your configured debugger UI in the browser to view the control flow diagram."}
 
 **Important:** This tool has kicked off a long-running workflow. The control flow graph is now being processed and will be available in the frontend UI. 
 
