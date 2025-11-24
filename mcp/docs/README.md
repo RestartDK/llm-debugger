@@ -4,19 +4,13 @@ This directory contains all documentation for the MCP Debug Context Server.
 
 ## Documentation Files
 
-- **CURSOR_MCP_SETUP.md** - Guide for setting up MCP server connection with Cursor (local stdio setup)
 - **SSE_SETUP.md** - Guide for configuring Cursor to use SSE transport (remote HTTP setup)
-- **DEPLOYMENT_STATUS.md** - Current deployment status and testing results
-- **TEST_HTTP.md** - HTTP endpoint testing guide
-- **TEST_MCP.md** - MCP stdio testing guide
+- **ADDING_NEW_TOOLS.md** - Guide for adding new MCP tools to the server
 
 ## Quick Start
 
 ### For Remote SSE Connection (Recommended)
 See [SSE_SETUP.md](./SSE_SETUP.md) for configuring Cursor with SSE transport.
-
-### For Local Stdio Connection
-See [CURSOR_MCP_SETUP.md](./CURSOR_MCP_SETUP.md) for local setup instructions.
 
 ## Testing
 
