@@ -1,59 +1,246 @@
-# LLM Debugger
+# BugPoint
 
-## Problem Statement Alignment
+<video controls width="100%">
+  <source src="attachments/bugpoint-demo.mp4" type="video/mp4">
+  Your browser does not support the video tag. You can
+  <a href="attachments/bugpoint-demo.mp4">download the demo here</a>.
+</video>
 
-**Core Insight:** Current AI coding agents treat code as monolithic text and only use post-execution feedback (pass/fail, error messages). This mirrors the LDB paper's finding that LLMs struggle with complex logic flows because they lack visibility into *how* code executes, not just *whether* it works.
+## Problem Statement
 
-**Our Solution:** Bring runtime execution transparency to agentic coding workflows by visualizing Control Flow Graphs, tracking intermediate variable states, and pinpointing exact failure points—giving LLMs (and developers) surgical precision for debugging.
+Modern AI coding agents are powerful at pattern matching and code generation, but they are effectively blind to how code actually executes. Today they:
 
-**Product:** A web-based debugging visualization tool that connects to your codebase via an MCP server and provides real-time CFG analysis for LLM-assisted debugging.
+- Only see coarse signals like "tests passed" or "stack trace at failure"
+- Drown in unstructured logs and text dumps
+- Struggle to reason about complex, branching control flow
+- Have no precise view of where runtime behavior diverged from intent
 
-**How it works:**
+This makes it hard for agents (and humans) to debug non-trivial systems, especially when failures depend on subtle runtime state across many basic blocks and files.
 
-1. Connect to any codebase via MCP server integration
-2. When debugging is triggered, the backend generates a CFG and instruments the code
-3. Run the code with test cases, capturing variable states at each basic block
-4. Visualize the CFG with color-coded nodes (green = consistent, red = failure points)
-5. Export the failure analysis as structured context for the LLM to target fixes
+---
 
-**Target Users:** Developers already comfortable with agentic workflows (Cursor, Claude Code, Windsurf users) who want better visibility into *why* their AI agent is struggling with a bug.
+## Solution
 
-**Long-term Potential (Impact):**
+**BugPoint** is an LLM-native debugging layer that shows AI how code actually executed, instead of drowning it in logs. It integrates into your existing workflow and uses program analysis with runtime instrumentation to give precise, structured visibility into real execution paths.
 
-- Plugin ecosystem for existing AI coding tools (Cursor, Cline, Continue, etc.)
-- Becomes the "debugging layer" that any AI coding agent can call
-- Could evolve into a standard protocol for LLM-aware debugging across the industry
+At a high level, BugPoint:
 
-**Strengths for judging:**
+- Builds control-flow graphs (CFGs) to represent program structure
+- Instruments code to capture runtime traces at the basic-block level
+- Records intermediate variable state along each execution path
+- Identifies the exact node(s) where behavior diverges from intent
+- Produces minimal, structured "failure slices" for LLMs to reason over
 
-- High impact potential as infrastructure for the AI coding ecosystem
-- Clear differentiation from existing tools
-- Addresses the exact problem statement (semantic awareness, reasoning across code)
+---
 
-## Frontend plan
+## How It Is Different
 
-- The user wants to see the current control flow graph that is being edited from the backend to be debugged
-- They want to see what files that are relevant
-- They want to see every node in the CFG with their relevant code snippet
-- They want to see what are the actual intermediate states are when debugging
-  - The outputs of what each code snippet in the CFG is creating at runtime
-- Then we want to have each node that has a pending state of it working, then it shows a state of whether it passed or failed the check at that point in the CFG
-  - If it fails, then show an error with the reason for it from the llm
-- They need to see what the current status is, is the agent finding more things? (less important)
+Compared to traditional debugging and tracing tools, BugPoint focuses on **LLM-friendly, structured views of execution**, not raw logs.
 
-## Backend plan
+- **Structure over noise**: Emphasizes CFGs and basic blocks instead of line-by-line logs
+- **Semantic failure focus**: Highlights where logic broke, not just where an exception was thrown
+- **Agent-first design**: Output is designed to be consumed by LLMs as context, not just humans
+- **Tight MCP integration**: Integrates directly with Cursor, Claude Code, Windsurf, Zed, and other MCP-capable tools
+- **Minimal failure slices**: Compresses large traces into compact, relevant slices that fit within LLM context windows
 
-- Set up MCP/FASTAPI and connect to coding agent (cursor)
-- Get mock inputs from coding agent saved as files and send to MCP with test python script
-- Create Agent workflow that is triggered in MCP/API and run in same container in coolify
-- Create data schema to connect to frontend
-- Create mock data API routes to have immediate connectivity for frontend iteration
+This makes BugPoint a debugging "lens" that any agent can call, rather than yet another logging system.
 
-## TODO
+---
 
-- [ ]  First get it done with the basic frontend normal api routes, and backend, with using the llm debugger, no applying of the code on the cursor
-- [ ]  Add feature for reasoning for problem
-- [ ]  Add the feature for applying of the code in the editor
-- [ ]  Fix search to move from cursor to our own implementation
-- [ ]  Maybe use markdown for runtime state inspector and problems
-- [ ]  Autonomously fix the bug by providing a loop with the agent once the debugger has found a result
+## Algorithm and Pipeline
+
+BugPoint’s core pipeline can be summarized in six stages.
+
+### Pipeline Diagram
+
+```mermaid
+flowchart LR
+    A[Target selection<br/>entrypoint + tests] --> B[Instrumentation<br/>build CFG]
+    B --> C[Execution<br/>collect runtime traces]
+    C --> D[Semantic failure detection<br/>find failure nodes]
+    D --> E[Minimal failure slice<br/>prune CFG + traces]
+    E --> F[Outputs<br/>MCP tools + UI visualization]
+```
+
+### 1. Target Selection
+
+1. The agent or user selects:
+   - A function, file, or entrypoint to debug
+   - One or more test cases or reproduction inputs
+2. BugPoint resolves the relevant code units and entrypoints.
+
+### 2. Instrumentation and CFG Construction
+
+- Parse the target code into an intermediate representation.
+- Build a **control-flow graph (CFG)** where:
+  - Nodes are basic blocks (straight-line code without jumps)
+  - Edges represent possible control transfers (branches, loops, calls)
+- Inject instrumentation at strategic points (block entry/exit, key expressions) to capture:
+  - Block identifiers
+  - Variable snapshots
+  - Branch decisions and call relationships
+
+### 3. Execution and Trace Collection
+
+For each test case or scenario:
+
+- Run the instrumented code inside a controlled environment.
+- Collect a **runtime trace** containing:
+  - Sequence of CFG nodes visited
+  - Variable states at each node
+  - Any exceptions or assertion failures
+  - Timing or iteration counts where relevant
+
+### 4. Semantic Failure Detection
+
+Using the collected traces, BugPoint:
+
+- Compares expected vs. actual behavior (from tests or specifications).
+- Locates the earliest CFG node where:
+  - A predicate fails
+  - A variable drifts from expected invariants
+  - Control flow diverges from the "healthy" path
+- Marks these as **failure nodes** and annotates them with:
+  - Local code snippet
+  - Variable diffs
+  - Human- and LLM-readable explanation of what went wrong.
+
+### 5. Minimal Failure Slice Generation
+
+To make the data usable by LLMs:
+
+- Identify the minimal subgraph of the CFG that:
+  - Contains the failure nodes
+  - Includes only the necessary predecessors and dependencies
+- Extract:
+  - Relevant code snippets
+  - Condensed variable histories
+  - A small number of critical paths rather than the whole trace
+
+The result is a **minimal failure slice**: a compact, structured representation of "what mattered" for the bug.
+
+### 6. Packaging for LLMs and UI
+
+Finally, BugPoint:
+
+- Serializes the CFG, traces, and failure slice into structured JSON
+- Surfaces this via:
+  - **MCP tools** for agent consumption
+  - A **web UI** that visualizes the CFG and highlights failure nodes
+
+Agents receive a clean, structured object they can reason over; humans see an interactive visualization they can explore.
+
+
+
+## Getting Started (High-Level)
+
+### Prerequisites
+
+- Python 3.12+
+- Node.js (for the frontend client)
+- An MCP-compatible coding assistant (Cursor, Claude Code, etc.)
+
+### Setup (Conceptual)
+
+1. **Backend (MCP Server)**:
+   - Install the Python package in `mcp/`
+   - Configure and run the MCP server (see below for MCP config)
+2. **Frontend**:
+   - Install dependencies in `client/`
+   - Run the dev server to view CFGs and traces
+3. **Editor Integration**:
+   - Configure your editor/agent to connect to the MCP server
+   - Use the provided tools to trigger BugPoint during debugging sessions.
+
+Concrete installation and configuration steps live in the `mcp/docs` directory.
+
+### MCP Configuration (Cursor example)
+
+For MCP-aware editors like Cursor, add a server entry in your MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "debug-context": {
+      "type": "sse",
+      "url": "https://coolify.scottbot.party/llm_debugger/sse"
+    }
+  }
+}
+```
+
+If your client supports HTTP transport instead of SSE:
+
+```json
+{
+  "mcpServers": {
+    "debug-context": {
+      "type": "http",
+      "url": "https://coolify.scottbot.party/llm_debugger",
+      "endpoints": {
+        "message": "/sse/message",
+        "sse": "/sse"
+      }
+    }
+  }
+}
+```
+
+
+### IDE / Editor Support
+
+BugPoint is editor-agnostic: as long as your IDE or editor can speak MCP (or call HTTP endpoints), it can use the debugger.  
+Today it works out of the box with MCP-aware tools like Cursor, Claude Code, Windsurf, and Zed, and can be integrated into any other IDE by pointing it at the running MCP server.
+
+---
+
+## Project Structure (High-Level)
+
+```text
+llm-debugger/
+├── mcp/                      # MCP server backend and core debugging logic
+│   ├── core/                 # Tracing, CFG, analysis, orchestration
+│   ├── api/                  # HTTP / MCP API surfaces
+│   └── docs/                 # MCP and deployment documentation
+├── client/                   # Frontend visualization (React + Vite)
+│   └── src/                  # CFG, timeline, and inspector components
+└── attachments/              # Demo videos and assets (e.g., bugpoint-demo.mp4)
+```
+
+### High-Level Architecture Diagram
+
+```mermaid
+flowchart LR
+    Dev[Editor / AI coding agent] -->|MCP| MCP[MCP server]
+    MCP --> Core[Debug engine<br/>orchestrator]
+    Core --> Tracer[Runtime tracer]
+    Core --> CFG[CFG builder]
+    Core --> Analyzer[Failure analyzer]
+    Core --> Store[Context / state storage]
+
+    MCP --> UI[Web frontend<br/>CFG + timeline UI]
+    UI --> Dev
+```
+
+---
+
+## Citations
+
+This project is heavily inspired by **Large Language Model Debugger (LDB)**, which first demonstrated the value of segmenting programs into basic blocks and using runtime execution information for LLM-guided debugging:
+
+- Li Zhong, Zilong Wang, and Jingbo Shang. 2024. **Debug like a Human: A Large Language Model Debugger via Verifying Runtime Execution Step by Step.** In *Findings of the Association for Computational Linguistics: ACL 2024*, pages 851–870, Bangkok, Thailand. Association for Computational Linguistics. [`https://aclanthology.org/2024.findings-acl.49/`](https://aclanthology.org/2024.findings-acl.49/)  \[[DOI: 10.18653/v1/2024.findings-acl.49](https://doi.org/10.18653/v1/2024.findings-acl.49)\]
+
+
+```bibtex
+@inproceedings{zhong-etal-2024-debug,
+  title     = {Debug like a Human: A Large Language Model Debugger via Verifying Runtime Execution Step by Step},
+  author    = {Zhong, Li and Wang, Zilong and Shang, Jingbo},
+  booktitle = {Findings of the Association for Computational Linguistics: ACL 2024},
+  year      = {2024},
+  address   = {Bangkok, Thailand},
+  publisher = {Association for Computational Linguistics},
+  pages     = {851--870},
+  url       = {https://aclanthology.org/2024.findings-acl.49/},
+  doi       = {10.18653/v1/2024.findings-acl.49}
+}
+```
