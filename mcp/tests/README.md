@@ -10,7 +10,7 @@ Automated HTTP endpoint testing script.
 **Usage:**
 ```bash
 cd tests
-./test_http.sh https://coolify.scottbot.party/llm_debugger
+./test_http.sh https://YOUR_SERVER_URL/llm_debugger
 ```
 
 **Tests:**
@@ -45,7 +45,7 @@ python3 test_mcp.py
 ### HTTP Tests
 ```bash
 cd /path/to/llm-debugger/mcp/tests
-./test_http.sh https://coolify.scottbot.party/llm_debugger
+./test_http.sh https://YOUR_SERVER_URL/llm_debugger
 ```
 
 ### MCP Stdio Tests

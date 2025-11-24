@@ -44,10 +44,8 @@ class HttpError extends Error {
 
 const normalizeBaseUrl = (url: string | undefined): string => {
   if (!url) {
-    // Base URL for the backend API server
-    // Backend routes: /get_control_flow_diagram, /execute_test_cases, etc.
-    // Full URL example: https://coolify.scottbot.party/llm_debugger/get_control_flow_diagram
-    return 'https://coolify.scottbot.party/llm_debugger';
+    // Fall back to relative URLs; configure VITE_API_BASE_URL for explicit host/port.
+    return '';
   }
   return url.endsWith('/') ? url.slice(0, -1) : url;
 };
@@ -173,8 +171,6 @@ function transformApiResponseToReactFlow(
   };
 }
 
-// Backend route: @app.get("/get_control_flow_diagram") from main.py
-// Full URL: https://coolify.scottbot.party/llm_debugger/get_control_flow_diagram
 export const fetchControlFlow = async (): Promise<ControlFlowResponse> => {
   const apiResponse = await request<ApiControlFlowResponse>(
     '/get_control_flow_diagram',

@@ -2,7 +2,7 @@
 
 [Demo](https://github.com/user-attachments/assets/d36b94ed-c0fb-4f3c-9e40-6003bcda3492)
 
-## Problem 
+## Problem
 
 Modern AI coding agents are powerful at pattern matching and code generation, but they are effectively blind to how code actually executes. Today they:
 
@@ -126,8 +126,6 @@ Finally, BugPoint:
 
 Agents receive a clean, structured object they can reason over; humans see an interactive visualization they can explore.
 
-
-
 ## Getting Started (High-Level)
 
 ### Prerequisites
@@ -148,18 +146,17 @@ Agents receive a clean, structured object they can reason over; humans see an in
    - Configure your editor/agent to connect to the MCP server
    - Use the provided tools to trigger BugPoint during debugging sessions.
 
-Concrete installation and configuration steps live in the `mcp/docs` directory.
-
 ### MCP Configuration (Cursor example)
 
-For MCP-aware editors like Cursor, add a server entry in your MCP settings:
+For MCP-aware editors like Cursor, add a server entry in your MCP settings
+pointing at your deployed BugPoint server (replace `YOUR_SERVER_URL` with your host):
 
 ```json
 {
   "mcpServers": {
     "debug-context": {
       "type": "sse",
-      "url": "https://coolify.scottbot.party/llm_debugger/sse"
+      "url": "https://YOUR_SERVER_URL/llm_debugger/sse"
     }
   }
 }
@@ -172,7 +169,7 @@ If your client supports HTTP transport instead of SSE:
   "mcpServers": {
     "debug-context": {
       "type": "http",
-      "url": "https://coolify.scottbot.party/llm_debugger",
+      "url": "https://YOUR_SERVER_URL/llm_debugger",
       "endpoints": {
         "message": "/sse/message",
         "sse": "/sse"
@@ -182,10 +179,9 @@ If your client supports HTTP transport instead of SSE:
 }
 ```
 
-
 ### IDE / Editor Support
 
-BugPoint is editor-agnostic: as long as your IDE or editor can speak MCP (or call HTTP endpoints), it can use the debugger.  
+BugPoint is editor-agnostic: as long as your IDE or editor can speak MCP (or call HTTP endpoints), it can use the debugger.
 Today it works out of the box with MCP-aware tools like Cursor, Claude Code, Windsurf, and Zed, and can be integrated into any other IDE by pointing it at the running MCP server.
 
 ---
@@ -225,7 +221,6 @@ flowchart LR
 This project is heavily inspired by **Large Language Model Debugger (LDB)**, which first demonstrated the value of segmenting programs into basic blocks and using runtime execution information for LLM-guided debugging:
 
 - Li Zhong, Zilong Wang, and Jingbo Shang. 2024. **Debug like a Human: A Large Language Model Debugger via Verifying Runtime Execution Step by Step.** In *Findings of the Association for Computational Linguistics: ACL 2024*, pages 851–870, Bangkok, Thailand. Association for Computational Linguistics. [`https://aclanthology.org/2024.findings-acl.49/`](https://aclanthology.org/2024.findings-acl.49/)  \[[DOI: 10.18653/v1/2024.findings-acl.49](https://doi.org/10.18653/v1/2024.findings-acl.49)\]
-
 
 ```bibtex
 @inproceedings{zhong-etal-2024-debug,
